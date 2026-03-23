@@ -1,43 +1,55 @@
 # Dhaka Bus Tracking System
 
-A real-time bus tracking application for Dhaka with live location updates, route visualization, and distance measurement.
+A real-time bus tracking app for Dhaka. You can see where buses are on a map and measure distances.
 
-## Features
+## What This App Does
 
-- 🗺️ **Real-time Bus Tracking** - Live location updates every 5 seconds
-- 📍 **Interactive Mapsed OpenStreetMap visualization
-- 📏 **Distance MetMap visualizatasurement** - Calculate road distances using OSRM routing
-- 🔍 **Bus Search** - Find buses by route name or number
-- 🚌 **Route Visualization** - See complete bus routes on the map
+- 🗺️ **See Buses on Map** - Watch buses move in real-time
+- 📍 **Interactive Map** - Click on the map to see bus locations  
+- 📏 **Measure Distances** - Calculate road distances between places
+- 🔍 **Search Buses** - Find buses by route or name
+- 🚌 **See Routes** - View complete bus routes on the map
 
-## Tech Stack
+## Quick Start (Easiest Way)
 
-**Frontend:** React 19, Vite, Tailwind CSS, Leaflet.js  
-**Backend:** Node.js, Express 5  
-**Database:** MySQL 8  
-**Infrastructure:** Docker, Docker Compose, Nginx
+### ⚠️ IMPORTANT: Install Docker First!
 
-## Quick Start
+**Docker is REQUIRED!** It's software that runs the entire app. Without it, nothing works.
+
+**Steps to install Docker:**
+1. Go to: https://www.docker.com/products/docker-desktop
+2. Click "Download for Mac" (Mac) or "Download for Windows" (Windows)
+3. Install it like any other app
+4. Open Docker app from your computer
+5. Wait until Docker is fully running (you'll see a Docker icon)
 
 ### Prerequisites
-- Docker & Docker Compose installed
-- Git
+- ✅ Docker installed and running (VERY IMPORTANT!)
+- ✅ Git installed
 
-### Installation
+### Installation (Copy and Paste These Commands)
 
 ```bash
-# Clone the repository
+# 1. Copy this and open Terminal or Command Prompt
+# 2. Paste this command:
 git clone https://github.com/srabon007-9/dhaka-bus.git
+
+# 3. Go into the folder:
 cd dhaka-bus
 
-# Start with Docker
+# 4. Start the app (this will take 1-2 minutes):
 docker-compose up --build
 
-# Access the application
-# Frontend: http://localhost
-# Backend API: http://localhost:3000
-# Database: localhost:3306
+# 5. Open your web browser and go to:
+# http://localhost
 ```
+
+That's it! The app is now running.
+
+You will see:
+- **Frontend** at: http://localhost (the website)
+- **Backend API** at: http://localhost:3000 (the server)
+- **Database** at: localhost:3306 (where data is stored)
 
 ## Project Structure
 

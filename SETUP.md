@@ -1,31 +1,49 @@
 # Local Development Setup
 
-This guide helps you set up the project for local development without Docker (optional).
+There are 2 ways to run this app:
+1. **Using Docker** (EASIEST - recommended)
+2. **Without Docker** (harder - requires more setup)
 
-## Using Docker (Recommended)
+---
 
-The easiest way to get started:
+## Way 1: Using Docker (RECOMMENDED)
+
+### ⚠️ IMPORTANT: Install Docker First!
+
+**Docker MUST be installed!** It runs everything for you automatically.
+
+**Download Docker:**
+1. Go to: https://www.docker.com/products/docker-desktop
+2. Click "Download for Mac" or "Download for Windows"
+3. Install it
+4. Open Docker and wait for it to fully load
+
+### After Installing Docker - Run This:
 
 ```bash
-# Clone the repository
+# 1. Open Terminal (Mac) or Command Prompt (Windows)
+# 2. Copy and paste this:
 git clone https://github.com/srabon007-9/dhaka-bus.git
 cd dhaka-bus
-
-# Start all services
 docker-compose up --build
 
-# Visit http://localhost
+# 3. Wait 1-2 minutes for everything to load
+# 4. Open http://localhost in your browser
 ```
 
-That's it! All services (frontend, backend, MySQL) are running.
+That's all! Everything runs automatically.
 
-## Local Development Setup (Without Docker)
+---
+
+## Way 2: Local Setup (Without Docker)
+
+This is harder and requires installing multiple things manually.
 
 ### Prerequisites
 
-- **Node.js** v18+ (https://nodejs.org)
-- **MySQL** v8.0 (https://dev.mysql.com/downloads/mysql/)
-- **npm** (comes with Node.js)
+- **Node.js** v18+ → Download from: https://nodejs.org
+- **MySQL** v8.0 → Download from: https://dev.mysql.com/downloads/mysql/
+- **npm** → Comes with Node.js automatically
 
 ### Step 1: Setup Database
 
