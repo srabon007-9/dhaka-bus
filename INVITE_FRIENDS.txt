@@ -1,0 +1,137 @@
+╔══════════════════════════════════════════════════════════════════════╗
+║         HOW TO INVITE FRIENDS TO CONTRIBUTE TO THIS PROJECT         ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+📖 READ THESE FILES (in order):
+
+1. SETUP_GITHUB.md
+   └─ How to push code to GitHub
+   └─ How to invite friends as collaborators
+   └─ Git commands for your team
+
+2. COLLABORATION.md
+   └─ Overview of collaboration workflow
+   └─ What friends can contribute
+   └─ GitHub best practices
+
+3. CONTRIBUTING.md
+   └─ Development setup for contributors
+   └─ Code style guidelines
+   └─ How to submit pull requests
+   └─ Common issues & solutions
+
+4. FRIEND_GUIDE.md
+   └─ SEND THIS TO YOUR FRIENDS
+   └─ Quick reference for contributing
+   └─ Copy-paste ready commands
+
+═════════════════════════════════════════════════════════════════════════
+
+🚀 QUICK STEPS:
+
+Step 1: CREATE GITHUB REPO
+  • Go to github.com
+  • Create new repo "dhaka-bus"
+  • Choose: Public, Skip initialization
+
+Step 2: PUSH YOUR CODE
+  cd dhaka-bus
+  git init
+  git remote add origin https://github.com/YOUR-USERNAME/dhaka-bus.git
+  git add .
+  git commit -m "Initial commit"
+  git push -u origin main
+
+Step 3: INVITE FRIENDS
+  • Go to GitHub repo Settings → Collaborators
+  • Click "Add people"
+  • Enter friend's GitHub username
+  • Choose role: "Write" (for team members)
+  • Send invitation
+
+Step 4: SHARE FRIEND_GUIDE.md
+  • Copy content from FRIEND_GUIDE.md
+  • Send to your friends
+  • They're ready to contribute!
+
+═════════════════════════════════════════════════════════════════════════
+
+📋 COLLABORATION FILES CREATED:
+
+✓ README.md               - Updated with contribution section
+✓ CONTRIBUTING.md        - Detailed contribution guidelines
+✓ COLLABORATION.md       - Collaboration workflow overview
+✓ SETUP_GITHUB.md        - How to setup GitHub & invite friends
+✓ FRIEND_GUIDE.md        - Quick reference for your friends
+✓ .github/pull_request_template.md  - PR template
+✓ .github/ISSUE_TEMPLATE/bug_report.md - Bug report template
+✓ .github/ISSUE_TEMPLATE/feature_request.md - Feature request template
+
+═════════════════════════════════════════════════════════════════════════
+
+💡 WHAT YOUR FRIENDS CAN DO:
+
+Frontend:
+  • Improve UI/UX
+  • Add new features to map
+  • Improve search functionality
+  • Mobile responsiveness
+
+Backend:
+  • Add user authentication
+  • Improve API performance
+  • Fix bugs
+  • Add new endpoints
+
+Data:
+  • Add more bus routes
+  • Improve location accuracy
+  • Add timing schedules
+
+Docs:
+  • Write documentation
+  • Create guides
+  • Add examples
+
+═════════════════════════════════════════════════════════════════════════
+
+📞 COMMUNICATION TIPS:
+
+GitHub Issues: Bug reports, feature requests, discussions
+Pull Requests: Code reviews, feature development
+Chat/Email: Urgent issues, real-time discussion
+
+═════════════════════════════════════════════════════════════════════════
+
+🎯 WORKFLOW FOR YOUR TEAM:
+
+1. Friend creates feature branch
+2. Friend makes changes
+3. Friend pushes and creates PR
+4. You review the code
+5. You approve or request changes
+6. You merge to main
+7. Friend pulls latest and continues
+
+═════════════════════════════════════════════════════════════════════════
+
+⚠️ PROTECT YOUR MAIN BRANCH:
+
+In GitHub Settings → Branches:
+  ✓ Require pull request reviews
+  ✓ Require status checks
+  ✓ Dismiss stale pull requests
+
+This ensures code quality and team knowledge sharing!
+
+═════════════════════════════════════════════════════════════════════════
+
+🎉 YOU'RE READY TO COLLABORATE!
+
+Next Step: Read SETUP_GITHUB.md to push your code to GitHub
+
+Questions? See COLLABORATION.md or FRIEND_GUIDE.md
+
+Happy collaborating! 🚀
+
+═════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,124 @@
+services:
+  # ==========================================
+  # MYSQL DATABASE SERVICE
+  # ==========================================
+  mysql:
+    # Use official MySQL image
+    image: mysql:8.0
+    container_name: dhaka-bus-mysql
+    
+    # Environment variables for MySQL
+    environment:
+      MYSQL_ROOT_PASSWORD: password # Root password
+      MYSQL_DATABASE: dhaka_bus # Create this database automatically
+      MYSQL_ROOT_HOST: '%' # Allow connections from any host
+      TZ: 'UTC' #Set timezone
+    
+    # Port mapping: host_port:container_port
+    ports:
+      - "3306:3306"
+    
+    # Volumes for data persistence
+    # This means database data is saved even if container is deleted
+    volumes:
+      # Mount SQL files to auto-run on startup
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
+      # Named volume for persistent data
+      - mysql_data:/var/lib/mysql
+    
+    # Health check - tells Docker when container is ready
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+    
+    networks:
+      - dhaka-network
+
+  # ==========================================
+  # BACKEND SERVICE (Node.js + Express)
+  # ==========================================
+  backend:
+    # Build from backend Dockerfile
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dhaka-bus-backend
+    
+    # Restart policy - restart if container crashes
+    restart: unless-stopped
+    
+    # Port mapping
+    ports:
+      - "3000:3000"
+    
+    # Environment variables
+    environment:
+      PORT: 3000
+      DB_HOST: mysql # Service name in this compose file
+      DB_USER: root
+      DB_PASSWORD: password
+      DB_NAME: dhaka_bus
+      FRONTEND_URL: http://localhost:5173
+    
+    # Volumes - map local files to container
+    volumes:
+      # Map backend source code (for development with nodemon)
+      - ./backend:/app
+      # Don't map node_modules (use container's version)
+      - /app/node_modules
+    
+    # Wait for MySQL before starting backend
+    depends_on:
+      mysql:
+        condition: service_healthy
+    
+    networks:
+      - dhaka-network
+
+  # ==========================================
+  # FRONTEND SERVICE (React + Vite + Nginx)
+  # ==========================================
+  frontend:
+    # Build from frontend Dockerfile
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: dhaka-bus-frontend
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Port mapping
+    ports:
+      - "80:80"
+    
+    # Environment variables
+    environment:
+      VITE_API_URL: http://localhost:3000
+    
+    # Depends on backend being ready
+    depends_on:
+      - backend
+    
+    networks:
+      - dhaka-network
+
+# ==========================================
+# VOLUMES
+# ==========================================
+volumes:
+  # Named volume for MySQL data
+  # This persists database data even when container is removed
+  mysql_data:
+    driver: local
+
+# ==========================================
+# NETWORKS
+# ==========================================
+networks:
+  # Network allows containers to communicate by service name
+  dhaka-network:
+    driver: bridge
