@@ -1,0 +1,248 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                   DHAKA BUS TRACKING - DATABASE SCHEMA                       ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ROUTES                                                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ PK  id (int)                                                                │
+│     route_name (varchar) UNIQUE                                             │
+│     start_point (varchar)                                                   │
+│     end_point (varchar)                                                     │
+│     created_at (timestamp)                                                  │
+│                                                                              │
+│ SAMPLE: 1 Route (Dhanmondi-Airport Express)                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+          │
+          ├──────────────────┬──────────────────┬─────────────────┐
+          │                  │                  │                 │
+          ↓                  ↓                  ↓                 ↓
+
+
+┌──────────────────────────────┐  ┌──────────────────────────────┐
+│ BUSES (10 rows)              │  │ BUS_STOPS (15 rows)          │
+├──────────────────────────────┤  ├──────────────────────────────┤
+│ PK  id (int)                 │  │ PK  id (int)                 │
+│ FK  route_id → routes(id)    │  │ FK  route_id → routes(id)    │
+│     name (varchar)           │  │     stop_name (varchar)      │
+│     capacity (int)           │  │     latitude (decimal 10,7)  │
+│     status (enum)            │  │     longitude (decimal 10,7) │
+│     created_at (timestamp)   │  │     stop_order (int) INDEX   │
+│                              │  │     created_at (timestamp)   │
+│ INDEXES:                     │  │                              │
+│ - PRIMARY KEY (id)           │  │ SAMPLE: 15 stops along route │
+│ - route_id                   │  │ Stop 1: Dhanmondi 27         │
+│ - status                     │  │ Stop 2: Dhanmondi 32         │
+│                              │  │ ...                          │
+│ SAMPLE: Bus 1-10             │  │ Stop 15: Airport             │
+│ Airport Express 1-10         │  └──────────────────────────────┘
+└──────────────────────────────┘
+          │
+          │ FK: bus_id
+          ↓
+
+┌──────────────────────────────────────────────────────────────────┐
+│ LOCATIONS (11,157+ rows - GROWING)                               │
+├──────────────────────────────────────────────────────────────────┤
+│ PK  id (int) AUTO_INCREMENT                                      │
+│ FK  bus_id → buses(id) CASCADE DELETE                            │
+│     latitude (decimal 9,6)                                       │
+│     longitude (decimal 9,6)                                      │
+│     speed_kmh (decimal 6,2)                                      │
+│     timestamp (timestamp) INDEX                                  │
+│                                                                  │
+│ INDEXES:                                                         │
+│ - PRIMARY KEY (id)                                               │
+│ - COMPOSITE (bus_id, timestamp DESC) ← Fast latest query         │
+│                                                                  │
+│ GROWTH: ~18,000 records/hour                                     │
+│         ~432,000 records/day                                     │
+│         Latest: 10 buses × many locations each                   │
+└──────────────────────────────────────────────────────────────────┘
+
+
+┌──────────────────────────────────────────────────────────────────┐
+│ ROUTE_WAYPOINTS (~500 rows)                                      │
+├──────────────────────────────────────────────────────────────────┤
+│ PK  id (int)                                                     │
+│ FK  route_id → routes(id) CASCADE DELETE                         │
+│     stop_from_order (int)                                        │
+│     stop_to_order (int)                                          │
+│     waypoint_sequence (int)                                      │
+│     latitude (decimal 10,7)                                      │
+│     longitude (decimal 10,7)                                     │
+│     created_at (timestamp)                                       │
+│                                                                  │
+│ PURPOSE: Stores actual road geometry between stops               │
+│          (Not direct line, actual street route)                  │
+└──────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TRIPS (7 rows) - Scheduled Departures                                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ PK  id (int)                                                                │
+│ FK  route_id → routes(id) CASCADE DELETE                                    │
+│ FK  bus_id → buses(id) CASCADE DELETE                                       │
+│     departure_time (datetime) INDEX                                         │
+│     arrival_time (datetime)                                                 │
+│     fare (decimal 10,2)                                                     │
+│     total_seats (int)                                                       │
+│     status (enum: scheduled, running, completed, cancelled)                 │
+│     created_at (timestamp)                                                  │
+│                                                                              │
+│ SAMPLE: Bus 1 has 7 scheduled trips today                                   │
+│         Trip 1: 06:00 → 07:30, ₹150/seat                                    │
+│         Trip 2: 08:00 → 09:30, ₹150/seat                                    │
+│         ...                                                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+          │
+          │ FK: trip_id
+          ↓
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TICKETS (2 rows) - Bookings                                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ PK  id (int)                                                                │
+│ FK  user_id → users(id) CASCADE DELETE                                      │
+│ FK  trip_id → trips(id) CASCADE DELETE                                      │
+│     seat_numbers (json) [1, 2, 3]                                           │
+│     passenger_name (varchar)                                                │
+│     total_price (decimal 10,2)                                              │
+│     status (enum: active, cancelled)                                        │
+│     created_at (timestamp) INDEX                                            │
+│                                                                              │
+│ SAMPLE:                                                                      │
+│ Ticket 1: User Ahmed Hassan booked Trip 1, Seats [1,2,3], ₹450             │
+│ Ticket 2: User Fatima Khan booked Trip 1, Seats [15,16], ₹300              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ USERS (2 rows) - Authentication                                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ PK  id (int)                                                                │
+│     name (varchar)                                                          │
+│     email (varchar) UNIQUE                                                  │
+│     password_hash (varchar)                                                 │
+│     role (enum: admin, user)                                                │
+│     created_at (timestamp)                                                  │
+│                                                                              │
+│ SAMPLE:                                                                      │
+│ User 1: System Admin (admin@dhakabus.com)                                   │
+│ User 2: Demo User (user@dhakabus.com)                                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                          REFERENTIAL INTEGRITY                               ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+routes (1)
+   │
+   ├─ buses (1) ──→ (10 buses) → locations (11,157+ records)
+   │                                │
+   │                                └─ Growing: ~18,000 records/hour
+   │
+   ├─ bus_stops (1) ──→ (15 stops)
+   │
+   ├─ route_waypoints (1) ──→ (~500 waypoints)
+   │
+   └─ trips (1) ──→ (7 scheduled trips)
+                      │
+                      └─ tickets (2 bookings)
+                          │
+                          └─ users (2 users)
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                        CASCADE DELETE PROTECTION                             ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+If route is deleted:
+  → All buses deleted → All locations deleted
+  → All bus_stops deleted
+  → All trips deleted → All tickets deleted
+
+If bus is deleted:
+  → All locations deleted
+  → All trips deleted → All tickets deleted
+
+If trip is deleted:
+  → All tickets deleted
+
+This ensures NO ORPHANED RECORDS (foreign key violations)
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                             QUERY INDEXES                                    ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Fast Queries:
+✓ Find latest location of all buses
+  SELECT * FROM locations WHERE bus_id IN (1,2,...,10) 
+  ORDER BY timestamp DESC LIMIT 10
+  → Uses: idx_bus_time (bus_id, timestamp DESC)
+  
+✓ Get active buses
+  SELECT * FROM buses WHERE status = 'active'
+  → Uses: idx_status
+  
+✓ Get user's tickets
+  SELECT * FROM tickets WHERE user_id = 2 ORDER BY created_at DESC
+  → Uses: idx_ticket_user (user_id, created_at DESC)
+  
+✓ Get trips for today
+  SELECT * FROM trips WHERE DATE(departure_time) = CURDATE()
+  → Uses: idx_trip_route (route_id, departure_time)
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                        DATA TYPES & PRECISION                                ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+GPS Coordinates:
+  latitude DECIMAL(9,6)   → ±90.000000 (-90 to +90)
+  longitude DECIMAL(9,6)  → ±180.000000 (-180 to +180)
+  Precision: ~0.1 meters (accurate for city-level tracking)
+
+Speed/Money:
+  speed_kmh DECIMAL(6,2)  → 0.00 to 9999.99 km/h
+  fare DECIMAL(10,2)      → ₹0.00 to ₹99999999.99
+  total_price DECIMAL(10,2) → Full precision for financial accuracy
+
+IDs:
+  All INT (PRIMARY KEY AUTO_INCREMENT)
+  Supports up to 2.1 billion records
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                          PERFORMANCE STATS                                   ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Current Data Volume:
+┌──────────────────────────────────────────┐
+│ Table         │ Rows    │ Growth        │
+├──────────────────────────────────────────┤
+│ routes        │ 1       │ Static        │
+│ bus_stops     │ 15      │ Static        │
+│ waypoints     │ 500+    │ Static        │
+│ buses         │ 10      │ Static        │
+│ users         │ 2       │ Very slow     │
+│ trips         │ 7       │ Slow          │
+│ locations     │ 11,157+ │ FAST ⚡      │
+│ tickets       │ 2       │ Slow          │
+│ TOTAL         │ ~12,000 │ ~18K/hour     │
+└──────────────────────────────────────────┘
+
+Storage Requirements:
+- Each location record: ~100 bytes
+- 18,000 records/hour = 1.8 MB/hour
+- 1 year = 15.77 GB (manageable)
+- Should implement archival after 1 year
+
+Connection Pooling:
+✓ Backend maintains 10 connection pool to MySQL
+✓ Handles concurrent requests efficiently
+✓ No connection leaks (Promise-based cleanup)
+
