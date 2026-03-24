@@ -1,8 +1,15 @@
 import StatusBadge from './common/StatusBadge';
 
 export default function BusCard({ bus, location, onSelect }) {
-  const speed = (bus.id * 7 + new Date().getSeconds()) % 60;
-  const status = speed < 5 ? 'stopped' : speed > 45 ? 'delayed' : 'moving';
+  const liveSpeed = Number(location?.speed_kmh);
+  const speed = Number.isFinite(liveSpeed) ? liveSpeed : (bus.id * 7 + new Date().getSeconds()) % 60;
+  const etaFromLive = Number(location?.eta_minutes);
+  const etaMinutes = Number.isFinite(etaFromLive) ? etaFromLive : (8 + (bus.id % 6));
+  const status = location?.is_moving === false ? 'stopped' : speed > 45 ? 'delayed' : 'moving';
+  const nextStop = Number(location?.next_stop);
+  const latitude = Number(location?.latitude);
+  const longitude = Number(location?.longitude);
+  const hasValidCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude);
 
   return (
     <button
@@ -21,16 +28,28 @@ export default function BusCard({ bus, location, onSelect }) {
       <div className="space-y-2 border-t border-white/5 pt-3">
         <div className="flex justify-between items-center text-sm">
           <span className="text-slate-400">⏱️ ETA</span>
-          <span className="font-semibold text-cyan-300">{8 + (bus.id % 6)} min</span>
+          <span className="font-semibold text-cyan-300">{etaMinutes} min</span>
         </div>
         <div className="flex justify-between items-center text-sm">
           <span className="text-slate-400">⚡ Speed</span>
-          <span className="font-semibold text-yellow-300">{speed} km/h</span>
+          <span className="font-semibold text-yellow-300">{speed.toFixed(1)} km/h</span>
         </div>
-        {location && (
+        {Number.isFinite(nextStop) && (
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-slate-400">🛑 Next Stop</span>
+            <span className="font-semibold text-emerald-300">{nextStop}</span>
+          </div>
+        )}
+        {Number.isFinite(location?.route_progress) && (
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-slate-400">📈 Progress</span>
+            <span className="font-semibold text-cyan-200">{location.route_progress}%</span>
+          </div>
+        )}
+        {location && hasValidCoordinates && (
           <div className="flex justify-between items-center text-sm">
             <span className="text-slate-400">📍 Location</span>
-            <span className="font-mono text-xs text-slate-500 truncate">{location.latitude.toFixed(3)}, {location.longitude.toFixed(3)}</span>
+            <span className="font-mono text-xs text-slate-500 truncate">{latitude.toFixed(3)}, {longitude.toFixed(3)}</span>
           </div>
         )}
       </div>

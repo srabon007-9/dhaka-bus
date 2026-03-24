@@ -33,7 +33,7 @@ export default function Footer() {
   return (
     <footer className="relative border-t border-white/5 bg-slate-950/50 backdrop-blur-xl">
       {/* Gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/5 to-transparent pointer-events-none" />
+      <div className="absolute inset-0 bg-linear-to-t from-cyan-500/5 to-transparent pointer-events-none" />
 
       <div className="relative z-10">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">

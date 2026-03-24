@@ -6,25 +6,59 @@ CREATE DATABASE IF NOT EXISTS dhaka_bus;
 USE dhaka_bus;
 
 -- Table 1: Routes
--- Stores all bus routes with their path coordinates
--- Example: Gulshan to Motijheel route with waypoints
+-- Stores all bus routes (simplified - just metadata)
 CREATE TABLE IF NOT EXISTS routes (
   id INT PRIMARY KEY AUTO_INCREMENT,
   route_name VARCHAR(255) NOT NULL UNIQUE,
-  coordinates JSON NOT NULL, -- Stores array of [lat, lng] pairs
+  start_point VARCHAR(100) NOT NULL,
+  end_point VARCHAR(100) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table 1.5: Bus Stops
+-- Stores ordered stops along a route with coordinates
+CREATE TABLE IF NOT EXISTS bus_stops (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  route_id INT NOT NULL,
+  stop_name VARCHAR(100) NOT NULL,
+  latitude DECIMAL(10, 7) NOT NULL,
+  longitude DECIMAL(10, 7) NOT NULL,
+  stop_order INT NOT NULL, -- Order of stop along route
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (route_id) REFERENCES routes(id) ON DELETE CASCADE,
+  INDEX idx_route_id (route_id),
+  INDEX idx_stop_order (stop_order)
+);
+
+-- Table 1.6: Route Waypoints
+-- Stores detailed waypoints that follow actual roads between stops
+-- Allows realistic road-based bus movement instead of straight lines
+CREATE TABLE IF NOT EXISTS route_waypoints (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  route_id INT NOT NULL,
+  stop_from_order INT NOT NULL, -- Starting stop order
+  stop_to_order INT NOT NULL, -- Ending stop order
+  waypoint_sequence INT NOT NULL, -- Order within this segment
+  latitude DECIMAL(10, 7) NOT NULL,
+  longitude DECIMAL(10, 7) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (route_id) REFERENCES routes(id) ON DELETE CASCADE,
+  INDEX idx_route_segment (route_id, stop_from_order, stop_to_order),
+  INDEX idx_route_waypoint (route_id, waypoint_sequence)
 );
 
 -- Table 2: Buses
 -- Stores information about each bus
 CREATE TABLE IF NOT EXISTS buses (
   id INT PRIMARY KEY AUTO_INCREMENT,
-  name VARCHAR(100) NOT NULL, -- Bus name/number (e.g., "Bus 25A")
-  route_name VARCHAR(255) NOT NULL,
-  start_point VARCHAR(100) NOT NULL, -- Starting location
-  end_point VARCHAR(100) NOT NULL, -- Ending location
+  name VARCHAR(100) NOT NULL, -- Bus name/number (e.g., "Airport Express 1")
+  route_id INT NOT NULL, -- Foreign key to routes table
+  capacity INT DEFAULT 40, -- Number of seats
+  status ENUM('active', 'inactive', 'maintenance') DEFAULT 'active',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (route_name) REFERENCES routes(route_name) ON DELETE CASCADE
+  FOREIGN KEY (route_id) REFERENCES routes(id) ON DELETE CASCADE,
+  INDEX idx_route_id (route_id),
+  INDEX idx_status (status)
 );
 
 -- Table 3: Locations
@@ -35,14 +69,14 @@ CREATE TABLE IF NOT EXISTS locations (
   bus_id INT NOT NULL,
   latitude DECIMAL(9, 6) NOT NULL, -- -90 to 90
   longitude DECIMAL(9, 6) NOT NULL, -- -180 to 180
+  speed_kmh DECIMAL(6, 2) DEFAULT 0,
   timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (bus_id) REFERENCES buses(id) ON DELETE CASCADE,
   INDEX idx_bus_time (bus_id, timestamp) -- For faster queries
 );
 
 -- Create indexes for better query performance
-CREATE INDEX idx_bus_name ON buses(name);
-CREATE INDEX idx_route_name ON buses(route_name);
+CREATE INDEX idx_bus_route ON buses(route_id);
 CREATE INDEX idx_location_latest ON locations(bus_id, timestamp DESC);
 
 -- Table 4: Users

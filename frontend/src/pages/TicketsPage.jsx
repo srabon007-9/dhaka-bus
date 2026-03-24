@@ -9,6 +9,19 @@ import { ticketApi } from '../services/api';
 import { useAuthContext } from '../contexts/AuthContext';
 import PageMotion from '../components/common/PageMotion';
 
+const parseSeatNumbers = (value) => {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
 export default function TicketsPage() {
   const { token } = useAuthContext();
   const toast = useToast();
@@ -24,7 +37,7 @@ export default function TicketsPage() {
       const data = await ticketApi.list(token);
       setTickets(data);
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to load tickets.');
+      setError(err?.response?.data?.message || 'Could not load tickets right now.');
     } finally {
       setLoading(false);
     }
@@ -42,10 +55,10 @@ export default function TicketsPage() {
   const cancelTicket = async (id) => {
     try {
       await ticketApi.cancel(id, token);
-      toast.success('Ticket cancelled successfully.');
+      toast.success('Ticket cancelled.');
       fetchTickets();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Cancellation failed.');
+      toast.error(err?.response?.data?.message || 'Could not cancel ticket.');
     }
   };
 
@@ -74,7 +87,7 @@ export default function TicketsPage() {
       </div>
 
       {loading ? <LoadingSkeleton rows={4} /> : null}
-      {error ? <ErrorCard title="Backend not connected" description={error} onRetry={fetchTickets} /> : null}
+      {error ? <ErrorCard title="Could not load tickets" description={error} onRetry={fetchTickets} /> : null}
 
       {!loading && !error && data.length === 0 ? (
         <EmptyState
@@ -91,7 +104,7 @@ export default function TicketsPage() {
                   id: ticket.id,
                   routeName: ticket.route_name,
                   tripTime: new Date(ticket.departure_time).toLocaleString(),
-                  seats: JSON.parse(ticket.seat_numbers || '[]'),
+                  seats: parseSeatNumbers(ticket.seat_numbers),
                   passengerName: ticket.passenger_name,
                   status: ticket.status,
                 }}

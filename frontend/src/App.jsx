@@ -18,7 +18,14 @@ function App() {
         <Route element={<PublicLayout />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/routes" element={<RoutesPage />} />
-          <Route path="/tracking" element={<TrackingPage />} />
+          <Route
+            path="/tracking"
+            element={(
+              <ErrorBoundary>
+                <TrackingPage />
+              </ErrorBoundary>
+            )}
+          />
           <Route
             path="/booking"
             element={(
@@ -30,9 +37,11 @@ function App() {
           <Route
             path="/tickets"
             element={(
-              <ProtectedRoute>
-                <TicketsPage />
-              </ProtectedRoute>
+              <ErrorBoundary>
+                <ProtectedRoute>
+                  <TicketsPage />
+                </ProtectedRoute>
+              </ErrorBoundary>
             )}
           />
           <Route

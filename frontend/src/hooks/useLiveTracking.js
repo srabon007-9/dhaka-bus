@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { busApi, locationApi, routeApi } from '../services/api';
+import { io } from 'socket.io-client';
+
+const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/api$/, '');
 
 export default function useLiveTracking() {
   const [buses, setBuses] = useState([]);
@@ -38,8 +41,40 @@ export default function useLiveTracking() {
 
   useEffect(() => {
     fetchAll();
-    const timer = setInterval(refreshLocations, 6000);
-    return () => clearInterval(timer);
+    const socket = io(SOCKET_URL, {
+      transports: ['websocket', 'polling'],
+      withCredentials: true,
+    });
+
+    socket.on('connect', () => {
+      setError('');
+    });
+
+    socket.on('locations:snapshot', (payload) => {
+      if (Array.isArray(payload)) {
+        setLocations(payload);
+      }
+    });
+
+    socket.on('locations:update', (payload) => {
+      if (!payload || !payload.bus_id) return;
+      setLocations((prev) => {
+        const next = prev.filter((item) => item.bus_id !== payload.bus_id);
+        next.push(payload);
+        return next;
+      });
+    });
+
+    socket.on('connect_error', async () => {
+      await refreshLocations();
+    });
+
+    const fallbackTimer = setInterval(refreshLocations, 15000);
+
+    return () => {
+      clearInterval(fallbackTimer);
+      socket.disconnect();
+    };
   }, []);
 
   const busLocations = useMemo(() => {

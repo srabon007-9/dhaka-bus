@@ -24,8 +24,8 @@ COPY . .
 EXPOSE 3000
 
 # Health check - tells Docker how to check if container is healthy
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/api/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- http://localhost:3000/api/health >/dev/null 2>&1 || exit 1
 
 # Start the application
 # Use node server.js instead of npm start for better signal handling in Docker

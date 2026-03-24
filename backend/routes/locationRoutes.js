@@ -10,7 +10,7 @@ const router = express.Router();
 // Returns the latest location for each bus (used for map display)
 router.get('/', async (req, res) => {
   try {
-    const locations = await locationModel.getAllLocations();
+    const locations = await locationModel.getLatestLocations();
     res.json({
       success: true,
       data: locations,
@@ -81,9 +81,14 @@ router.get('/history/:busId', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const result = await locationModel.updateLocation(req.body);
+    const latest = await locationModel.getLatestLocationByBusId(req.body.bus_id);
+    const io = req.app.get('io');
+    if (io && latest) {
+      io.emit('locations:update', latest);
+    }
     res.status(201).json({
       success: true,
-      data: result,
+      data: latest || result,
       message: 'Location updated successfully',
     });
   } catch (error) {

@@ -13,6 +13,26 @@ const getAllLocations = async () => {
   }
 };
 
+// Get latest location for every bus
+const getLatestLocations = async () => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT l.*
+       FROM locations l
+       INNER JOIN (
+         SELECT bus_id, MAX(id) AS latest_id
+         FROM locations
+         GROUP BY bus_id
+       ) latest ON latest.latest_id = l.id
+       ORDER BY l.bus_id ASC`
+    );
+    return rows;
+  } catch (error) {
+    console.error('Error fetching latest locations:', error);
+    throw error;
+  }
+};
+
 // Get latest location for a specific bus
 // This is used to show the current position of a bus on the map
 const getLatestLocationByBusId = async (busId) => {
@@ -47,10 +67,10 @@ const getLocationHistory = async (busId, limit = 50) => {
 // This is called by GPS tracking or simulated updates
 const updateLocation = async (locationData) => {
   try {
-    const { bus_id, latitude, longitude } = locationData;
+    const { bus_id, latitude, longitude, speed_kmh } = locationData;
     const [result] = await pool.query(
-      'INSERT INTO locations (bus_id, latitude, longitude, timestamp) VALUES (?, ?, ?, NOW())',
-      [bus_id, latitude, longitude]
+      'INSERT INTO locations (bus_id, latitude, longitude, speed_kmh, timestamp) VALUES (?, ?, ?, ?, NOW())',
+      [bus_id, latitude, longitude, Number.isFinite(Number(speed_kmh)) ? Number(speed_kmh) : 0]
     );
     return result;
   } catch (error) {
@@ -61,6 +81,7 @@ const updateLocation = async (locationData) => {
 
 module.exports = {
   getAllLocations,
+  getLatestLocations,
   getLatestLocationByBusId,
   getLocationHistory,
   updateLocation,

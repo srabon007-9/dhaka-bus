@@ -11,6 +11,7 @@ export default function useAuth() {
     return raw ? JSON.parse(raw) : null;
   });
   const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(() => Boolean(localStorage.getItem(TOKEN_KEY)));
 
   const isAuthenticated = useMemo(() => Boolean(token && user), [token, user]);
 
@@ -55,13 +56,17 @@ export default function useAuth() {
   const logout = () => {
     setToken('');
     setUser(null);
+    setInitializing(false);
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
   };
 
   useEffect(() => {
     const verify = async () => {
-      if (!token) return;
+      if (!token) {
+        setInitializing(false);
+        return;
+      }
       try {
         const profile = await authApi.me(token);
         setUser(profile);
@@ -71,6 +76,8 @@ export default function useAuth() {
         setUser(null);
         localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem(USER_KEY);
+      } finally {
+        setInitializing(false);
       }
     };
 
@@ -81,6 +88,7 @@ export default function useAuth() {
     token,
     user,
     loading,
+    initializing,
     isAuthenticated,
     login,
     register,

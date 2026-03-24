@@ -93,7 +93,7 @@ export default function AuthPage() {
             disabled={loading}
             className="w-full rounded-xl bg-cyan-500 px-4 py-2.5 font-semibold text-slate-900 hover:bg-cyan-400 disabled:opacity-60"
           >
-            {loading ? 'Signing you in...' : mode === 'login' ? 'Sign In' : 'Create Account'}
+            {loading ? (mode === 'login' ? 'Signing you in...' : 'Creating your account...') : mode === 'login' ? 'Sign In' : 'Create Account'}
           </button>
         </form>
       </section>

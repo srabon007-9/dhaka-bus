@@ -25,13 +25,13 @@ const getBusById = async (busId) => {
   }
 };
 
-// Get buses by route name
-// Useful for searching "Bus Gulshan to Motijheel"
-const getBusesByRoute = async (routeName) => {
+// Get buses by route ID
+// Useful for finding all buses on a specific route
+const getBusesByRouteId = async (routeId) => {
   try {
     const [rows] = await pool.query(
-      'SELECT * FROM buses WHERE route_name = ?',
-      [routeName]
+      'SELECT * FROM buses WHERE route_id = ?',
+      [routeId]
     );
     return rows;
   } catch (error) {
@@ -43,10 +43,10 @@ const getBusesByRoute = async (routeName) => {
 // Add a new bus (for testing/admin purposes)
 const addBus = async (busData) => {
   try {
-    const { name, route_name, start_point, end_point } = busData;
+    const { name, route_id, capacity, status } = busData;
     const [result] = await pool.query(
-      'INSERT INTO buses (name, route_name, start_point, end_point) VALUES (?, ?, ?, ?)',
-      [name, route_name, start_point, end_point]
+      'INSERT INTO buses (name, route_id, capacity, status) VALUES (?, ?, ?, ?)',
+      [name, route_id, capacity || 40, status || 'active']
     );
     return result;
   } catch (error) {
@@ -57,12 +57,12 @@ const addBus = async (busData) => {
 
 const updateBus = async (busId, busData) => {
   try {
-    const { name, route_name, start_point, end_point } = busData;
+    const { name, route_id, capacity, status } = busData;
     const [result] = await pool.query(
       `UPDATE buses
-       SET name = ?, route_name = ?, start_point = ?, end_point = ?
+       SET name = ?, route_id = ?, capacity = ?, status = ?
        WHERE id = ?`,
-      [name, route_name, start_point, end_point, busId]
+      [name, route_id, capacity, status, busId]
     );
     return result;
   } catch (error) {
@@ -84,7 +84,7 @@ const deleteBus = async (busId) => {
 module.exports = {
   getAllBuses,
   getBusById,
-  getBusesByRoute,
+  getBusesByRouteId,
   addBus,
   updateBus,
   deleteBus,
