@@ -4,9 +4,23 @@
 USE dhaka_bus;
 
 -- Clear existing data (safe during development)
-DELETE FROM locations;
-DELETE FROM buses;
-DELETE FROM routes;
+SET FOREIGN_KEY_CHECKS = 0;
+TRUNCATE TABLE tickets;
+TRUNCATE TABLE trips;
+TRUNCATE TABLE locations;
+TRUNCATE TABLE buses;
+TRUNCATE TABLE routes;
+TRUNCATE TABLE users;
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- ==========================================
+-- USERS - Demo accounts for authentication
+-- ==========================================
+-- Password for admin@dhakabus.com: admin123
+-- Password for user@dhakabus.com: user123
+INSERT INTO users (name, email, password_hash, role) VALUES
+('System Admin', 'admin@dhakabus.com', '$2b$10$EWn/WPJkxGRndQuN6J9KA.pqyzICNCkqGeNEHuxpw03Fu4MmPh8S6', 'admin'),
+('Demo User', 'user@dhakabus.com', '$2b$10$pJMO5xgbU/3a5bL2wpAtUeM8rQ/wJq3yQVqHJwYObh7q7Y5nN4wH2', 'user');
 
 -- ==========================================
 -- ROUTES - Define major bus routes in Dhaka
@@ -137,3 +151,21 @@ INSERT INTO locations (bus_id, latitude, longitude) VALUES
 INSERT INTO locations (bus_id, latitude, longitude) VALUES
 (12, 23.8100, 90.3890),
 (12, 23.8080, 90.3875);
+
+-- ==========================================
+-- TRIPS - Scheduled departures with fares
+-- ==========================================
+INSERT INTO trips (route_id, bus_id, departure_time, arrival_time, fare, total_seats, status) VALUES
+(1, 1, '2026-03-25 08:00:00', '2026-03-25 09:00:00', 60.00, 40, 'scheduled'),
+(1, 2, '2026-03-25 10:30:00', '2026-03-25 11:30:00', 60.00, 40, 'scheduled'),
+(2, 4, '2026-03-25 09:00:00', '2026-03-25 10:00:00', 50.00, 40, 'scheduled'),
+(3, 6, '2026-03-25 12:30:00', '2026-03-25 13:45:00', 70.00, 40, 'scheduled'),
+(4, 9, '2026-03-25 14:00:00', '2026-03-25 15:00:00', 65.00, 40, 'scheduled'),
+(5, 11, '2026-03-25 17:00:00', '2026-03-25 18:15:00', 80.00, 40, 'scheduled');
+
+-- ==========================================
+-- TICKETS - Existing demo bookings
+-- ==========================================
+INSERT INTO tickets (user_id, trip_id, seat_numbers, passenger_name, total_price, status) VALUES
+(2, 1, '["S1","S2"]', 'Demo User', 120.00, 'active'),
+(2, 3, '["S7"]', 'Demo User', 50.00, 'active');

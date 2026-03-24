@@ -3,6 +3,7 @@
 
 const express = require('express');
 const busModel = require('../models/busModel');
+const { verifyToken, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -20,6 +21,25 @@ router.get('/', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching buses',
+      error: error.message,
+    });
+  }
+});
+
+// GET /api/buses/route/:name - Get buses by route name
+// Example: /api/buses/route/Gulshan%20to%20Motijheel
+router.get('/route/:name', async (req, res) => {
+  try {
+    const buses = await busModel.getBusesByRoute(req.params.name);
+    res.json({
+      success: true,
+      data: buses,
+      message: 'Buses for route fetched successfully',
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching buses for route',
       error: error.message,
     });
   }
@@ -50,28 +70,9 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// GET /api/buses/route/:name - Get buses by route name
-// Example: /api/buses/route/Gulshan%20to%20Motijheel
-router.get('/route/:name', async (req, res) => {
-  try {
-    const buses = await busModel.getBusesByRoute(req.params.name);
-    res.json({
-      success: true,
-      data: buses,
-      message: 'Buses for route fetched successfully',
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching buses for route',
-      error: error.message,
-    });
-  }
-});
-
 // POST /api/buses - Add a new bus
 // Body should contain: { name, route_name, start_point, end_point }
-router.post('/', async (req, res) => {
+router.post('/', verifyToken, requireAdmin, async (req, res) => {
   try {
     const result = await busModel.addBus(req.body);
     res.status(201).json({
@@ -85,6 +86,41 @@ router.post('/', async (req, res) => {
       message: 'Error adding bus',
       error: error.message,
     });
+  }
+});
+
+// PUT /api/buses/:id - Update bus
+router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const existing = await busModel.getBusById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Bus not found' });
+    }
+
+    const payload = {
+      name: req.body.name ?? existing.name,
+      route_name: req.body.route_name ?? existing.route_name,
+      start_point: req.body.start_point ?? existing.start_point,
+      end_point: req.body.end_point ?? existing.end_point,
+    };
+
+    const result = await busModel.updateBus(req.params.id, payload);
+    res.json({ success: true, data: result, message: 'Bus updated successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error updating bus', error: error.message });
+  }
+});
+
+// DELETE /api/buses/:id - Delete bus
+router.delete('/:id', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await busModel.deleteBus(req.params.id);
+    if (!result.affectedRows) {
+      return res.status(404).json({ success: false, message: 'Bus not found' });
+    }
+    res.json({ success: true, message: 'Bus deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error deleting bus', error: error.message });
   }
 });
 

@@ -20,8 +20,8 @@ const getRouteById = async (routeId) => {
     const [rows] = await pool.query('SELECT * FROM routes WHERE id = ?', [
       routeId,
     ]);
-    // Parse the coordinates JSON since it's stored as string in database
-    if (rows[0]) {
+    // Parse coordinates safely (string or already parsed JSON)
+    if (rows[0] && typeof rows[0].coordinates === 'string') {
       rows[0].coordinates = JSON.parse(rows[0].coordinates);
     }
     return rows[0];
@@ -38,7 +38,7 @@ const getRouteByName = async (routeName) => {
       'SELECT * FROM routes WHERE route_name = ?',
       [routeName]
     );
-    if (rows[0]) {
+    if (rows[0] && typeof rows[0].coordinates === 'string') {
       rows[0].coordinates = JSON.parse(rows[0].coordinates);
     }
     return rows[0];
@@ -63,9 +63,35 @@ const addRoute = async (routeData) => {
   }
 };
 
+const updateRoute = async (routeId, routeData) => {
+  try {
+    const { route_name, coordinates } = routeData;
+    const [result] = await pool.query(
+      'UPDATE routes SET route_name = ?, coordinates = ? WHERE id = ?',
+      [route_name, JSON.stringify(coordinates), routeId]
+    );
+    return result;
+  } catch (error) {
+    console.error('Error updating route:', error);
+    throw error;
+  }
+};
+
+const deleteRoute = async (routeId) => {
+  try {
+    const [result] = await pool.query('DELETE FROM routes WHERE id = ?', [routeId]);
+    return result;
+  } catch (error) {
+    console.error('Error deleting route:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   getAllRoutes,
   getRouteById,
   getRouteByName,
   addRoute,
+  updateRoute,
+  deleteRoute,
 };

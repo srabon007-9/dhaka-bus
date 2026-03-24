@@ -55,9 +55,37 @@ const addBus = async (busData) => {
   }
 };
 
+const updateBus = async (busId, busData) => {
+  try {
+    const { name, route_name, start_point, end_point } = busData;
+    const [result] = await pool.query(
+      `UPDATE buses
+       SET name = ?, route_name = ?, start_point = ?, end_point = ?
+       WHERE id = ?`,
+      [name, route_name, start_point, end_point, busId]
+    );
+    return result;
+  } catch (error) {
+    console.error('Error updating bus:', error);
+    throw error;
+  }
+};
+
+const deleteBus = async (busId) => {
+  try {
+    const [result] = await pool.query('DELETE FROM buses WHERE id = ?', [busId]);
+    return result;
+  } catch (error) {
+    console.error('Error deleting bus:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   getAllBuses,
   getBusById,
   getBusesByRoute,
   addBus,
+  updateBus,
+  deleteBus,
 };

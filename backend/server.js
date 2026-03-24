@@ -9,6 +9,9 @@ const cors = require('cors');
 const busRoutes = require('./routes/busRoutes');
 const routeRoutes = require('./routes/routeRoutes');
 const locationRoutes = require('./routes/locationRoutes');
+const authRoutes = require('./routes/authRoutes');
+const tripRoutes = require('./routes/tripRoutes');
+const ticketRoutes = require('./routes/ticketRoutes');
 
 // Initialize Express app
 const app = express();
@@ -44,6 +47,9 @@ app.get('/api/health', (req, res) => {
 app.use('/api/buses', busRoutes);
 app.use('/api/routes', routeRoutes);
 app.use('/api/locations', locationRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/trips', tripRoutes);
+app.use('/api/tickets', ticketRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -54,6 +60,9 @@ app.get('/', (req, res) => {
       buses: '/api/buses',
       routes: '/api/routes',
       locations: '/api/locations',
+      auth: '/api/auth',
+      trips: '/api/trips',
+      tickets: '/api/tickets',
       health: '/api/health',
     },
   });

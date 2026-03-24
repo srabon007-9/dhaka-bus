@@ -1,192 +1,203 @@
-# Local Development Setup
+# Setup Guide (Docker Only)
 
-There are 2 ways to run this app:
-1. **Using Docker** (EASIEST - recommended)
-2. **Without Docker** (harder - requires more setup)
+This guide is intentionally simple so anyone can run the app and contribute.
 
----
+## 1) Install required tools
 
-## Way 1: Using Docker (RECOMMENDED)
+Docker runs everything in containers. You don't need to install Node, MySQL, or anything else separately.
 
-### ⚠️ IMPORTANT: Install Docker First!
+1. Docker Desktop: https://www.docker.com/products/docker-desktop
+2. Git: https://git-scm.com/
 
-**Docker MUST be installed!** It runs everything for you automatically.
+Open Docker Desktop and wait until it is running.
 
-**Download Docker:**
-1. Go to: https://www.docker.com/products/docker-desktop
-2. Click "Download for Mac" or "Download for Windows"
-3. Install it
-4. Open Docker and wait for it to fully load
+## 2) Get the project
 
-### After Installing Docker - Run This:
+Use only ONE of the following options:
+
+### Option A: Just run the app (quick test)
 
 ```bash
-# 1. Open Terminal (Mac) or Command Prompt (Windows)
-# 2. Copy and paste this:
 git clone https://github.com/srabon007-9/dhaka-bus.git
 cd dhaka-bus
-docker-compose up --build
-
-# 3. Wait 1-2 minutes for everything to load
-# 4. Open http://localhost in your browser
 ```
 
-That's all! Everything runs automatically.
+### Option B: Contribute code (recommended for friends)
+
+1. Fork this repo on GitHub (click **Fork**)
+2. Clone your fork:
+
+```bash
+git clone https://github.com/YOUR-USERNAME/dhaka-bus.git
+cd dhaka-bus
+```
+
+Why this exists: you cannot push directly to the main repo unless you have write access.
+Forking lets you push to your own copy and open a pull request.
+
+## 3) Run the app
+
+From the project root:
+
+```bash
+docker-compose up --build
+```
+
+Wait 1-2 minutes on first startup.
+
+Open:
+
+- Frontend: http://localhost
+- Backend: http://localhost:3000
+- Health: http://localhost:3000/api/health
+
+Demo users:
+
+- Admin: `admin@dhakabus.com` / `admin123`
+- User: `user@dhakabus.com` / `user123`
+
+## 4) Useful Docker commands
+
+```bash
+# See if containers are running
+docker-compose ps
+
+# View logs
+docker-compose logs -f
+
+# Stop everything
+docker-compose down
+
+# Rebuild after changes
+docker-compose up --build
+```
 
 ---
 
-## Way 2: Local Setup (Without Docker)
+## Troubleshooting
 
-This is harder and requires installing multiple things manually.
-
-### Prerequisites
-
-- **Node.js** v18+ → Download from: https://nodejs.org
-- **MySQL** v8.0 → Download from: https://dev.mysql.com/downloads/mysql/
-- **npm** → Comes with Node.js automatically
-
-### Step 1: Setup Database
+### Docker container crashes
 
 ```bash
-# Start MySQL service
-# On Mac with Homebrew:
-brew services start mysql
-
-# Connect to MySQL
-mysql -u root
-
-# In MySQL prompt, run:
-CREATE DATABASE dhaka_bus;
-EXIT;
-
-# Run schema and seed
-mysql -u root dhaka_bus < database/schema.sql
-mysql -u root dhaka_bus < database/seed.sql
+# Rebuild everything
+docker-compose down
+docker-compose up --build
 ```
 
-### Step 2: Setup Backend
+### Port already in use
+
+Something else is using port `80`, `3000`, or `3306`.
+Stop that app and run Docker again.
+
+### Changes not appearing
 
 ```bash
-# Navigate to backend folder
-cd backend
-
-# Create .env file
-cp .env.example .env
-
-# Edit .env with your MySQL credentials:
-# DB_HOST=localhost
-# DB_USER=root
-# DB_PASSWORD=your_password
-# DB_NAME=dhaka_bus
-
-# Install dependencies
-npm install
-
-# Start server (runs on port 3000)
-npm run dev
+docker-compose down
+docker-compose up --build
 ```
 
-### Step 3: Setup Frontend
+### Full reset
 
 ```bash
-# In another terminal, navigate to frontend
-cd frontend
-
-# Create .env.local file
-cp .env.example .env.local
-
-# Install dependencies
-npm install
-
-# Start development server (runs on port 5173)
-npm run dev
+docker-compose down -v
+docker-compose up --build
 ```
 
-### Step 4: Access Application
+### Still stuck?
 
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:3000/api
-- Database: localhost:3306
+Open an issue on GitHub: https://github.com/srabon007-9/dhaka-bus/issues
 
-## Common Issues
-
-### MySQL Connection Failed
-
-```bash
-# Check if MySQL is running
-mysql -u root -e "SELECT 1;"
-
-# If not running, start it
-# On Mac: brew services start mysql
-# On Linux: sudo systemctl start mysql
-# On Windows: Open Services and find MySQL
-```
-
-### Port 3000 or 5173 Already in Use
-
-```bash
-# Option 1: Kill the process using the port
-# On Mac/Linux:
-lsof -i :3000
-kill -9 <PID>
-
-# Option 2: Use different port in .env
-BACKEND_PORT=3001
-```
-
-### Node Modules Issues
-
-```bash
-# Delete and reinstall
-rm -rf node_modules package-lock.json
-npm install
-```
-
-## Useful Commands
-
-```bash
-# Frontend development
-cd frontend
-npm run dev          # Start dev server
-npm run build        # Production build
-npm run preview      # Preview production build
-npm run lint         # Check code quality
-
-# Backend development
-cd backend
-npm run dev          # Start with nodemon
-npm start            # Start production server
-
-# Database
-mysql -u root dhaka_bus        # Connect to database
-SHOW TABLES;                    # List tables
-SELECT * FROM buses;           # View buses
-```
-
-## Environment Variables
-
-### Backend (.env)
-
-```env
-DB_HOST=localhost
-DB_USER=root
-DB_PASSWORD=your_password
-DB_NAME=dhaka_bus
-FRONTEND_URL=http://localhost:5173
-```
-
-### Frontend (.env.local)
-
-```env
-VITE_API_URL=http://localhost:3000/api
-```
+---
 
 ## Next Steps
 
-1. Read [CONTRIBUTING.md](CONTRIBUTING.md) to start contributing
-2. Check [README.md](README.md) for project overview
-3. Explore the codebase in `frontend/src` and `backend/`
+1. Run the app with Docker
+2. Check if http://localhost works
+3. Follow the contribution workflow below
 
 ---
 
-**Happy coding!** 🚀
+## Contributing Workflow
+
+### 1) Fork and Clone
+
+```bash
+git clone https://github.com/YOUR-USERNAME/dhaka-bus.git
+cd dhaka-bus
+```
+
+### 2) Create a Branch
+
+```bash
+git checkout -b feature/your-idea
+```
+
+Branch naming examples:
+- `feature/add-notification`
+- `bugfix/fix-login`
+- `docs/update-setup`
+
+### 3) Make Changes and Test
+
+- Frontend: `frontend/src/`
+- Backend: `backend/`
+- Database: `database/`
+
+```bash
+# Run and test with Docker
+docker-compose up --build
+```
+
+### 4) Commit
+
+```bash
+git add .
+git commit -m "feat: short description"
+```
+
+Commit prefixes:
+- `feat:` new feature
+- `fix:` bug fix
+- `docs:` documentation
+- `refactor:` cleanup
+
+### 5) Push and Open PR
+
+```bash
+git push origin feature/your-idea
+```
+
+Then open a pull request on GitHub and describe your changes.
+
+### 6) Owner Control (protect main branch)
+
+Repository owner should enable branch protection so no one can push directly to main/master.
+
+GitHub steps:
+
+1. Open your repo on GitHub
+2. Go to **Settings → Branches → Add branch protection rule**
+3. Branch name pattern: `main` (or `master`, whichever you use)
+4. Enable:
+	- **Require a pull request before merging**
+	- **Require approvals** (at least 1)
+	- **Require status checks to pass** (if CI exists)
+	- **Block force pushes**
+	- **Restrict who can push** (optional: owner only)
+
+Result: contributors can only submit pull requests, and only you (or approved maintainers) can merge to main/master.
+
+### Code Style
+
+- Use clear names (`isLoading` over `load`)
+- Add comments only where needed
+- Keep formatting consistent
+- Remove debug logs before PR
+
+### Common Git Issue
+
+```bash
+git pull origin master
+# resolve conflicts if any
+git push
+```

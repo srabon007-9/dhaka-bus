@@ -44,3 +44,49 @@ CREATE TABLE IF NOT EXISTS locations (
 CREATE INDEX idx_bus_name ON buses(name);
 CREATE INDEX idx_route_name ON buses(route_name);
 CREATE INDEX idx_location_latest ON locations(bus_id, timestamp DESC);
+
+-- Table 4: Users
+-- Authentication users (admin and regular users)
+CREATE TABLE IF NOT EXISTS users (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(120) NOT NULL,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  role ENUM('admin', 'user') DEFAULT 'user',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table 5: Trips
+-- A scheduled departure of a bus on a route
+CREATE TABLE IF NOT EXISTS trips (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  route_id INT NOT NULL,
+  bus_id INT NOT NULL,
+  departure_time DATETIME NOT NULL,
+  arrival_time DATETIME NOT NULL,
+  fare DECIMAL(10, 2) NOT NULL DEFAULT 0,
+  total_seats INT NOT NULL DEFAULT 40,
+  status ENUM('scheduled', 'running', 'completed', 'cancelled') DEFAULT 'scheduled',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (route_id) REFERENCES routes(id) ON DELETE CASCADE,
+  FOREIGN KEY (bus_id) REFERENCES buses(id) ON DELETE CASCADE
+);
+
+-- Table 6: Tickets
+-- Bookings created by users against a trip
+CREATE TABLE IF NOT EXISTS tickets (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  trip_id INT NOT NULL,
+  seat_numbers JSON NOT NULL,
+  passenger_name VARCHAR(120) NOT NULL,
+  total_price DECIMAL(10, 2) NOT NULL,
+  status ENUM('active', 'cancelled') DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_trip_route ON trips(route_id, departure_time);
+CREATE INDEX idx_trip_bus ON trips(bus_id);
+CREATE INDEX idx_ticket_user ON tickets(user_id, created_at DESC);
