@@ -6,7 +6,14 @@ CREATE DATABASE IF NOT EXISTS dhaka_bus;
 USE dhaka_bus;
 
 -- Table 1: Routes
--- Stores all bus routes (simplified - just metadata)
+-- Stores all bus routes (designed for scalability - supports unlimited routes)
+-- Currently seeded with: Route 1 (Dhanmondi–Airport Express)
+-- 
+-- To add a new route:
+-- INSERT INTO routes (route_name, start_point, end_point) VALUES 
+--   ('Route Name', 'Start Location', 'End Location');
+--
+-- Then add stops, waypoints, and buses with the new route_id
 CREATE TABLE IF NOT EXISTS routes (
   id INT PRIMARY KEY AUTO_INCREMENT,
   route_name VARCHAR(255) NOT NULL UNIQUE,
@@ -49,6 +56,12 @@ CREATE TABLE IF NOT EXISTS route_waypoints (
 
 -- Table 2: Buses
 -- Stores information about each bus
+-- Each bus is assigned to a route via route_id
+-- Multiple buses can be assigned to same route (e.g., Route 1 can have buses 1-10)
+-- 
+-- To add a new bus to a specific route:
+-- INSERT INTO buses (name, route_id, capacity, status) VALUES 
+--   ('Bus Name', route_id, 40, 'active');
 CREATE TABLE IF NOT EXISTS buses (
   id INT PRIMARY KEY AUTO_INCREMENT,
   name VARCHAR(100) NOT NULL, -- Bus name/number (e.g., "Airport Express 1")

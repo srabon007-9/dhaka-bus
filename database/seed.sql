@@ -1,5 +1,14 @@
--- Dhaka Bus Tracking System - Seed Data (Realistic Dhanmondi-Airport Route)
--- Single route with 15 stops and accurate Dhaka coordinates
+-- Dhaka Bus Tracking System - Seed Data
+-- ROUTE 1: Dhanmondi–Airport Express (15 stops)
+-- 
+-- This is a scalable, multi-route system.
+-- You can add more routes in the future by:
+-- 1. INSERT new route into routes table
+-- 2. INSERT stops into bus_stops with route_id
+-- 3. INSERT buses into buses table with route_id
+-- 4. Buses will automatically start tracking via simulator
+--
+-- See ROUTES_BUSES_SCALING_GUIDE.md for complete setup instructions
 
 USE dhaka_bus;
 

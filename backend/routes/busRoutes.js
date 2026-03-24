@@ -7,15 +7,30 @@ const { verifyToken, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
-// GET /api/buses - Get all buses
-// Returns a JSON array of all buses in the system
+// GET /api/buses - Get all buses or filter by route
+// Query params: ?route_id=1 (optional - filter by specific route)
+// Examples: 
+//   /api/buses (all buses)
+//   /api/buses?route_id=1 (only buses on route 1)
 router.get('/', async (req, res) => {
   try {
-    const buses = await busModel.getAllBuses();
+    const { route_id } = req.query;
+    
+    let buses;
+    if (route_id) {
+      // Filter buses by route_id
+      buses = await busModel.getBusesByRouteId(route_id);
+    } else {
+      // Get all buses
+      buses = await busModel.getAllBuses();
+    }
+    
     res.json({
       success: true,
       data: buses,
-      message: 'All buses fetched successfully',
+      message: route_id 
+        ? `Buses for route ${route_id} fetched successfully`
+        : 'All buses fetched successfully',
     });
   } catch (error) {
     res.status(500).json({
