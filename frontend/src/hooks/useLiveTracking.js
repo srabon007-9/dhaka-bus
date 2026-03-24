@@ -21,7 +21,7 @@ export default function useLiveTracking() {
       setRoutes(routeData);
       setLocations(locationData);
     } catch {
-      setError('Backend not connected. Please start backend and try again.');
+      setError('Cannot connect to the server. Please start the backend and try again.');
     } finally {
       setLoading(false);
     }
@@ -32,7 +32,7 @@ export default function useLiveTracking() {
       const locationData = await locationApi.list();
       setLocations(locationData);
     } catch {
-      setError('Live updates paused. Backend is not reachable.');
+      setError('Live updates are paused because the backend is unreachable.');
     }
   };
 

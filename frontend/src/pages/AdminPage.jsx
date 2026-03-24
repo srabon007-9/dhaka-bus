@@ -35,7 +35,7 @@ export default function AdminPage() {
       const data = await tripApi.list();
       setTrips(data);
     } catch {
-      toast.error('Unable to load trips.');
+      toast.error('Could not load trips.');
     }
   }, [toast]);
 
@@ -99,10 +99,10 @@ export default function AdminPage() {
       if (formType === 'bus') {
         if (editingId) {
           await busApi.update(editingId, form, token);
-          toast.success('Bus updated successfully.');
+          toast.success('Bus updated.');
         } else {
           await busApi.create(form, token);
-          toast.success('Bus added successfully.');
+          toast.success('Bus added.');
         }
       } else if (formType === 'route') {
         if (editingId) {
@@ -115,10 +115,10 @@ export default function AdminPage() {
             },
             token
           );
-          toast.success('Route updated successfully.');
+          toast.success('Route updated.');
         } else {
           await routeApi.create({ route_name: form.route_name, coordinates: [[23.81, 90.41], [23.77, 90.39]] }, token);
-          toast.success('Route added successfully.');
+          toast.success('Route added.');
         }
       } else {
         const payload = {
@@ -132,17 +132,17 @@ export default function AdminPage() {
 
         if (editingId) {
           await tripApi.update(editingId, payload, token);
-          toast.success('Trip updated successfully.');
+          toast.success('Trip updated.');
         } else {
           await tripApi.create(payload, token);
-          toast.success('Trip added successfully.');
+          toast.success('Trip added.');
         }
       }
       setIsOpen(false);
       retry();
       fetchTrips();
     } catch {
-      toast.error('Save failed. Please check backend connection.');
+      toast.error('Could not save changes. Please check your connection and try again.');
     }
   };
 
@@ -150,18 +150,18 @@ export default function AdminPage() {
     try {
       if (type === 'bus') {
         await busApi.remove(row.id, token);
-        toast.success('Bus deleted successfully.');
+        toast.success('Bus deleted.');
       } else if (type === 'route') {
         await routeApi.remove(row.id, token);
-        toast.success('Route deleted successfully.');
+        toast.success('Route deleted.');
       } else {
         await tripApi.remove(row.id, token);
-        toast.success('Trip deleted successfully.');
+        toast.success('Trip deleted.');
       }
       retry();
       fetchTrips();
     } catch {
-      toast.error('Delete failed.');
+      toast.error('Could not delete this item.');
     }
   };
 
@@ -170,7 +170,7 @@ export default function AdminPage() {
       return (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-semibold text-white">Manage Buses</h2>
+            <h2 className="text-2xl font-semibold text-white">Buses</h2>
             <button type="button" onClick={() => openModal('bus')} className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-900">
               Add Bus
             </button>
@@ -194,7 +194,7 @@ export default function AdminPage() {
       return (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-semibold text-white">Manage Routes</h2>
+            <h2 className="text-2xl font-semibold text-white">Routes</h2>
             <button type="button" onClick={() => openModal('route')} className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-900">
               Add Route
             </button>
@@ -215,7 +215,7 @@ export default function AdminPage() {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-semibold text-white">Manage Trips</h2>
+          <h2 className="text-2xl font-semibold text-white">Trips</h2>
           <button type="button" onClick={() => openModal('trip')} className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-900">
             Add Trip
           </button>

@@ -1,4 +1,5 @@
-import { MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet';
+import { useEffect } from 'react';
+import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -9,9 +10,42 @@ const busIcon = new L.DivIcon({
   iconAnchor: [12, 12],
 });
 
+function MapSizeFixer() {
+  const map = useMap();
+
+  useEffect(() => {
+    const resizeMap = () => map.invalidateSize();
+
+    const timer = setTimeout(resizeMap, 120);
+    map.on('zoomend', resizeMap);
+    map.on('moveend', resizeMap);
+    window.addEventListener('resize', resizeMap);
+
+    return () => {
+      clearTimeout(timer);
+      map.off('zoomend', resizeMap);
+      map.off('moveend', resizeMap);
+      window.removeEventListener('resize', resizeMap);
+    };
+  }, [map]);
+
+  return null;
+}
+
 export default function MapView({ routes = [], buses = [], busLocations = new Map(), selectedBus }) {
   return (
-    <MapContainer center={[23.8103, 90.4125]} zoom={12} className="h-[72vh] w-full rounded-2xl border border-white/10">
+    <MapContainer
+      center={[23.8103, 90.4125]}
+      zoom={12}
+      zoomAnimation={false}
+      fadeAnimation={false}
+      markerZoomAnimation={false}
+      whenReady={(event) => {
+        setTimeout(() => event.target.invalidateSize(), 0);
+      }}
+      className="h-[72vh] w-full rounded-2xl border border-white/10"
+    >
+      <MapSizeFixer />
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

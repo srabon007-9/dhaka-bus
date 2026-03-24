@@ -54,12 +54,11 @@ export const authApi = {
       const response = await api.post('/auth/login', payload);
       const data = response?.data?.data;
       if (!data) {
-        console.error('Login response structure:', response?.data);
-        throw new Error('Invalid response format from login endpoint');
+        throw new Error('Unexpected response from login endpoint');
       }
       return data;
     } catch (error) {
-      console.error('Login API error:', error.message, error.response?.data);
+      console.error('Login request failed:', error?.response?.data || error?.message);
       throw error;
     }
   },

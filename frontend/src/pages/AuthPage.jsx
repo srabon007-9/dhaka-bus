@@ -31,14 +31,14 @@ export default function AuthPage() {
     }
 
     setMode('login');
-    setError('Registration successful. Please login now.');
+    setError('Account created successfully. You can sign in now.');
   };
 
   return (
     <PageMotion>
       <section className="mx-auto max-w-lg rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur-xl">
-        <h1 className="text-3xl font-bold text-white">{mode === 'login' ? 'Login' : 'Create Account'}</h1>
-        <p className="mt-2 text-sm text-slate-300">Use demo admin: admin@dhakabus.com / admin123</p>
+        <h1 className="text-3xl font-bold text-white">{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
+        <p className="mt-2 text-sm text-slate-300">Demo admin: admin@dhakabus.com / admin123</p>
 
         <div className="mt-5 inline-flex rounded-xl bg-white/10 p-1">
           <button
@@ -46,14 +46,14 @@ export default function AuthPage() {
             onClick={() => setMode('login')}
             className={`rounded-lg px-4 py-2 text-sm font-semibold ${mode === 'login' ? 'bg-cyan-500 text-slate-900' : 'text-slate-200'}`}
           >
-            Login
+            Sign In
           </button>
           <button
             type="button"
             onClick={() => setMode('register')}
             className={`rounded-lg px-4 py-2 text-sm font-semibold ${mode === 'register' ? 'bg-cyan-500 text-slate-900' : 'text-slate-200'}`}
           >
-            Register
+            Sign Up
           </button>
         </div>
 
@@ -93,7 +93,7 @@ export default function AuthPage() {
             disabled={loading}
             className="w-full rounded-xl bg-cyan-500 px-4 py-2.5 font-semibold text-slate-900 hover:bg-cyan-400 disabled:opacity-60"
           >
-            {loading ? 'Please wait...' : mode === 'login' ? 'Login' : 'Register'}
+            {loading ? 'Signing you in...' : mode === 'login' ? 'Sign In' : 'Create Account'}
           </button>
         </form>
       </section>

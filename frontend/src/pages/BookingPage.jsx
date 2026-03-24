@@ -47,7 +47,7 @@ export default function BookingPage() {
       const data = await tripApi.list(routeItem.id);
       setTripOptions(data);
     } catch {
-      toast.error('Failed to load trips for this route.');
+      toast.error('Could not load trips for this route.');
     }
   };
 
@@ -58,7 +58,7 @@ export default function BookingPage() {
       const reserved = await ticketApi.getBookedSeats(tripItem.id);
       setBookedSeats(reserved);
     } catch {
-      toast.error('Could not load seat availability.');
+      toast.error('Could not load seat availability right now.');
     }
   };
 
@@ -70,7 +70,7 @@ export default function BookingPage() {
 
   const confirmBooking = async () => {
     if (!route || !trip || !selectedSeats.length || !passengerName.trim()) {
-      toast.error('Please complete all booking steps.');
+      toast.error('Please complete every step before confirming.');
       return;
     }
 
@@ -84,22 +84,22 @@ export default function BookingPage() {
         token
       );
 
-      toast.success('Booking confirmed successfully.');
+      toast.success('Your booking is confirmed.');
       setStep(0);
       setRoute(null);
       setTrip(null);
       setSelectedSeats([]);
       setPassengerName(user?.name || '');
     } catch (error) {
-      toast.error(error?.response?.data?.message || 'Booking failed. Please retry.');
+      toast.error(error?.response?.data?.message || 'Booking failed. Please try again.');
     }
   };
 
   return (
     <PageMotion>
       <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur-xl">
-      <h2 className="text-2xl font-semibold text-white">Book Your Seat</h2>
-      <p className="mt-1 text-sm text-slate-300">Follow the step-by-step booking flow.</p>
+      <h2 className="text-2xl font-semibold text-white">Book your seat</h2>
+      <p className="mt-1 text-sm text-slate-300">Complete each step to confirm your ticket.</p>
 
       <StepProgress steps={steps} currentStep={step} />
 
@@ -190,7 +190,7 @@ export default function BookingPage() {
         </div>
       ) : null}
 
-      {!routes.length ? <EmptyState title="No routes available" description="Please add routes from admin panel first." icon="🧭" /> : null}
+      {!routes.length ? <EmptyState title="No routes available" description="Ask an admin to add routes first." icon="🧭" /> : null}
 
       <Toast toasts={toast.toasts} removeToast={toast.removeToast} />
       </section>

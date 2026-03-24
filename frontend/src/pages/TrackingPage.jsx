@@ -1,12 +1,10 @@
 import { useMemo, useState } from 'react';
 import BusCard from '../components/BusCard';
-import FloatingPanel from '../components/FloatingPanel';
 import MapView from '../components/MapView';
 import SearchBar from '../components/SearchBar';
 import ErrorCard from '../components/common/ErrorCard';
 import LoadingSkeleton from '../components/common/LoadingSkeleton';
 import useLiveTracking from '../hooks/useLiveTracking';
-import PageMotion from '../components/common/PageMotion';
 
 export default function TrackingPage() {
   const { buses, routes, busLocations, loading, error, retry } = useLiveTracking();
@@ -20,18 +18,18 @@ export default function TrackingPage() {
   }, [buses, query]);
 
   return (
-    <PageMotion>
-      <section className="space-y-5">
-      <div className="relative">
+    <section className="space-y-5">
+      <div>
         <MapView routes={routes} buses={visibleBuses} busLocations={busLocations} selectedBus={selectedBus} />
-        <FloatingPanel>
+
+        <div className="mt-4 w-full rounded-2xl border border-white/20 bg-slate-950/95 p-4 shadow-2xl">
           <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Live Control Center</p>
           <h2 className="mt-1 text-xl font-semibold text-white">Bus Tracking</h2>
           <p className="mt-1 text-xs text-slate-300">Search buses and tap any card to highlight.</p>
           <div className="mt-3">
             <SearchBar placeholder="Search bus or route" onSearch={setQuery} />
           </div>
-          <div className="mt-3 max-h-80 space-y-2 overflow-auto pr-1">
+          <div className="mt-3 max-h-80 space-y-2 overflow-auto pr-1 md:grid md:grid-cols-2 md:gap-3 md:space-y-0 lg:grid-cols-3">
             {loading ? <LoadingSkeleton rows={3} /> : null}
             {error ? <ErrorCard title="Backend not connected" description={error} onRetry={retry} /> : null}
             {!loading && !error
@@ -45,9 +43,8 @@ export default function TrackingPage() {
                 ))
               : null}
           </div>
-        </FloatingPanel>
+        </div>
       </div>
-      </section>
-    </PageMotion>
+    </section>
   );
 }

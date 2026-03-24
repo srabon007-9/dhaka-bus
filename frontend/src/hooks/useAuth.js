@@ -19,7 +19,7 @@ export default function useAuth() {
     try {
       const data = await authApi.login({ email, password });
       if (!data || !data.token || !data.user) {
-        throw new Error('Invalid login response: missing token or user');
+        throw new Error('Unexpected login response from server');
       }
       setToken(data.token);
       setUser(data.user);
@@ -30,7 +30,7 @@ export default function useAuth() {
       console.error('Login error:', error);
       return {
         ok: false,
-        message: error?.response?.data?.message || error?.message || 'Login failed',
+        message: error?.response?.data?.message || error?.message || 'Could not sign in',
       };
     } finally {
       setLoading(false);
@@ -45,7 +45,7 @@ export default function useAuth() {
     } catch (error) {
       return {
         ok: false,
-        message: error?.response?.data?.message || 'Registration failed',
+        message: error?.response?.data?.message || 'Could not create your account',
       };
     } finally {
       setLoading(false);
