@@ -167,6 +167,60 @@ const getBookedSeatsByTripId = async (tripId, boardingStopId, dropoffStopId) => 
   )];
 };
 
+const getBookingQuote = async ({ trip_id, boarding_stop_id, dropoff_stop_id, seat_numbers }) => {
+  const normalizedSeats = normalizeSeatNumbers(seat_numbers);
+  if (!normalizedSeats.length) {
+    throw new TicketValidationError('At least one valid seat number is required', 400);
+  }
+
+  const normalizedBoardingStopId = toPositiveInt(boarding_stop_id);
+  const normalizedDropoffStopId = toPositiveInt(dropoff_stop_id);
+  if (!normalizedBoardingStopId || !normalizedDropoffStopId) {
+    throw new TicketValidationError('boarding_stop_id and dropoff_stop_id are required', 400);
+  }
+
+  const metadata = await getSegmentMetadata(pool, trip_id, normalizedBoardingStopId, normalizedDropoffStopId);
+  const { trip, boardingStop, dropoffStop, totalSegments, segmentLength } = metadata;
+
+  if (trip.status === 'cancelled' || trip.status === 'completed') {
+    throw new TicketValidationError('This trip is not available for booking', 409);
+  }
+
+  const outOfRangeSeat = normalizedSeats.find((seat) => seat > Number(trip.total_seats));
+  if (outOfRangeSeat) {
+    throw new TicketValidationError(`Seat ${outOfRangeSeat} is not available on this trip`, 400);
+  }
+
+  const [rows] = await pool.query(
+    `SELECT tk.seat_numbers, board.stop_order AS boarding_order, dropoff.stop_order AS dropoff_order
+     FROM tickets tk
+     JOIN bus_stops board ON board.id = tk.boarding_stop_id
+     JOIN bus_stops dropoff ON dropoff.id = tk.dropoff_stop_id
+     WHERE tk.trip_id = ? AND tk.status != 'cancelled'`,
+    [trip_id]
+  );
+
+  const bookedSeats = getConflictingSeats(rows, boardingStop.stop_order, dropoffStop.stop_order);
+  const conflict = normalizedSeats.find((seat) => bookedSeats.includes(seat));
+  if (conflict) {
+    throw new TicketValidationError(`Seat ${conflict} is already booked`, 409);
+  }
+
+  const segmentFare = normalizePrice((Number(trip.fare) * segmentLength) / totalSegments);
+  const totalPrice = normalizePrice(segmentFare * normalizedSeats.length);
+
+  return {
+    trip,
+    boarding_stop_id: normalizedBoardingStopId,
+    dropoff_stop_id: normalizedDropoffStopId,
+    seat_numbers: normalizedSeats,
+    segment_fare: segmentFare,
+    total_price: totalPrice,
+    boarding_stop_name: boardingStop.stop_name,
+    dropoff_stop_name: dropoffStop.stop_name,
+  };
+};
+
 const reserveTicket = async ({ user_id, trip_id, boarding_stop_id, dropoff_stop_id, seat_numbers, passenger_name }) => {
   const normalizedSeats = normalizeSeatNumbers(seat_numbers);
   if (!normalizedSeats.length) {
@@ -261,11 +315,32 @@ const cancelTicket = async (id, userId, role) => {
   return result;
 };
 
+const getTicketById = async (id) => {
+  const [rows] = await pool.query(
+    `SELECT tk.*, tr.departure_time, tr.arrival_time, tr.fare, r.route_name, b.name AS bus_name,
+            board.stop_name AS boarding_stop_name, board.stop_order AS boarding_stop_order,
+            dropoff.stop_name AS dropoff_stop_name, dropoff.stop_order AS dropoff_stop_order
+     FROM tickets tk
+     JOIN trips tr ON tr.id = tk.trip_id
+     JOIN routes r ON r.id = tr.route_id
+     JOIN buses b ON b.id = tr.bus_id
+     JOIN bus_stops board ON board.id = tk.boarding_stop_id
+     JOIN bus_stops dropoff ON dropoff.id = tk.dropoff_stop_id
+     WHERE tk.id = ?
+     LIMIT 1`,
+    [id]
+  );
+
+  return rows[0] || null;
+};
+
 module.exports = {
   TicketValidationError,
   getTicketsByUserId,
   getAllTickets,
   getBookedSeatsByTripId,
+  getBookingQuote,
   reserveTicket,
   cancelTicket,
+  getTicketById,
 };

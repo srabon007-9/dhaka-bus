@@ -35,7 +35,14 @@ const allowedOrigins = [
 
 // Middleware - these run before routes
 // Body parser - allows us to receive JSON data in request bodies
-app.use(express.json());
+// Keep raw webhook payload for Stripe signature verification.
+app.use(express.json({
+  verify: (req, _res, buf) => {
+    if (req.originalUrl === '/api/tickets/payment/webhook') {
+      req.rawBody = buf;
+    }
+  },
+}));
 
 // CORS - allows frontend to call backend API
 // In Docker, frontend runs on localhost:5173 and backend on localhost:3000
