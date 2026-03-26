@@ -62,6 +62,19 @@ services:
       DB_PASSWORD: password
       DB_NAME: dhaka_bus
       FRONTEND_URL: http://localhost
+      # Optional SMTP settings for verification emails
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-srabonahmed2002@gmail.com}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      MAIL_FROM: ${MAIL_FROM:-Dhaka Bus <srabonahmed2002@gmail.com>}
+      # Payment gateway settings (Stripe)
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_CURRENCY: ${STRIPE_CURRENCY:-bdt}
+      PAYMENT_SUCCESS_URL: ${PAYMENT_SUCCESS_URL:-http://localhost/booking?payment=success&session_id={CHECKOUT_SESSION_ID}}
+      PAYMENT_CANCEL_URL: ${PAYMENT_CANCEL_URL:-http://localhost/booking?payment=cancelled}
     
     # Volumes - map local files to container
     volumes:

@@ -5,6 +5,7 @@ import StepProgress from '../components/common/StepProgress';
 import EmptyState from '../components/common/EmptyState';
 import ErrorCard from '../components/common/ErrorCard';
 import LoadingSkeleton from '../components/common/LoadingSkeleton';
+import Modal from '../components/common/Modal';
 import useLiveTracking from '../hooks/useLiveTracking';
 import useToast from '../hooks/useToast';
 import Toast from '../components/common/Toast';
@@ -12,7 +13,7 @@ import { stopApi, ticketApi, tripApi } from '../services/api';
 import { useAuthContext } from '../contexts/AuthContext';
 import PageMotion from '../components/common/PageMotion';
 
-const steps = ['Journey', 'Bus', 'Seats', 'Passenger', 'Confirm', 'Done'];
+const steps = ['Choose Journey', 'Select Bus & Seats', 'Confirm Booking'];
 
 const makeSeats = (count) =>
   Array.from({ length: count }).map((_, index) => ({
@@ -37,12 +38,10 @@ const formatTime = (value) =>
 
 const calculateSegmentPrice = (trip, boardingStop, dropoffStop, stops) => {
   if (!trip || !boardingStop || !dropoffStop || stops.length < 2) return 0;
-
   const minOrder = Math.min(...stops.map((stop) => stop.stop_order));
   const maxOrder = Math.max(...stops.map((stop) => stop.stop_order));
   const totalSegments = Math.max(1, maxOrder - minOrder);
   const segmentLength = dropoffStop.stop_order - boardingStop.stop_order;
-
   return Number(((Number(trip.fare) * segmentLength) / totalSegments).toFixed(2));
 };
 
@@ -65,6 +64,7 @@ export default function BookingPage() {
   const [tripError, setTripError] = useState('');
   const [bookedSeats, setBookedSeats] = useState([]);
   const [selectedSeats, setSelectedSeats] = useState([]);
+  const [seatModalOpen, setSeatModalOpen] = useState(false);
   const [passengerName, setPassengerName] = useState(user?.name || '');
   const [processing, setProcessing] = useState(false);
   const [successState, setSuccessState] = useState(null);
@@ -90,6 +90,51 @@ export default function BookingPage() {
   const totalPrice = (segmentPrice * selectedSeats.length).toFixed(2);
   const selectedSeatLabels = selectedSeats.map((seat) => `S${seat}`).join(', ');
 
+  useEffect(() => {
+    const search = new URLSearchParams(window.location.search);
+    const paymentStatus = search.get('payment');
+    const sessionId = search.get('session_id');
+
+    if (paymentStatus === 'cancelled') {
+      toast.info('Payment was cancelled. You can try again.');
+      navigate('/booking', { replace: true });
+      return;
+    }
+
+    if (paymentStatus === 'success' && sessionId && token) {
+      const finalizePayment = async () => {
+        setProcessing(true);
+        try {
+          const result = await ticketApi.completePayment(sessionId, token);
+          const ticket = result?.ticket;
+
+          if (!ticket) {
+            throw new Error('Ticket confirmation response is incomplete.');
+          }
+
+          setSuccessState({
+            routeName: ticket.route_name,
+            busName: ticket.bus_name,
+            departure: ticket.departure_time,
+            journeyLabel: `${ticket.boarding_stop_name} to ${ticket.dropoff_stop_name}`,
+            seatLabels: (ticket.seat_numbers || []).map((seat) => `S${seat}`).join(', '),
+            totalPrice: Number(ticket.total_price).toFixed(2),
+            email: user?.email || '',
+          });
+          setStep(3);
+          toast.success('✓ Payment verified and booking confirmed!');
+        } catch (error) {
+          toast.error(error?.response?.data?.message || error.message || 'Payment verification failed.');
+        } finally {
+          setProcessing(false);
+          navigate('/booking', { replace: true });
+        }
+      };
+
+      finalizePayment();
+    }
+  }, [navigate, toast, token, user?.email]);
+
   const resetBooking = () => {
     setStep(0);
     setRoute(null);
@@ -107,6 +152,7 @@ export default function BookingPage() {
     setPassengerName(user?.name || '');
     setProcessing(false);
     setSuccessState(null);
+    setSeatModalOpen(false);
   };
 
   const handleRouteSelect = async (routeItem) => {
@@ -126,7 +172,7 @@ export default function BookingPage() {
       const routeStops = await stopApi.listByRoute(routeItem.id);
       setStops(routeStops);
     } catch {
-      setStopsError('Could not load stops for this route right now.');
+      setStopsError('Could not load stops for this route.');
     } finally {
       setStopsLoading(false);
     }
@@ -135,7 +181,6 @@ export default function BookingPage() {
   useEffect(() => {
     const loadTrips = async () => {
       if (!route || !boardingStop || !dropoffStop) return;
-
       setTrip(null);
       setTripOptions([]);
       setBookedSeats([]);
@@ -152,23 +197,12 @@ export default function BookingPage() {
         setTripLoading(false);
       }
     };
-
     loadTrips();
   }, [route, boardingStop, dropoffStop]);
 
-  const continueFromJourney = () => {
-    if (!route || !boardingStop || !dropoffStop) {
-      toast.error('Select a route, boarding stop, and destination stop first.');
-      return;
-    }
-    setStep(1);
-  };
-
-  const handleTripSelect = async (tripItem) => {
+  const handleBusSelect = async (tripItem) => {
     setTrip(tripItem);
     setSelectedSeats([]);
-    setBookedSeats([]);
-
     try {
       const reserved = await ticketApi.getBookedSeats(tripItem.id, boardingStop.id, dropoffStop.id);
       setBookedSeats(
@@ -176,9 +210,9 @@ export default function BookingPage() {
           .map((seat) => Number(seat))
           .filter((seat) => Number.isInteger(seat) && seat > 0)
       );
-      setStep(2);
+      setSeatModalOpen(true);
     } catch {
-      toast.error('Could not load seat availability right now.');
+      toast.error('Could not load seat availability.');
     }
   };
 
@@ -187,42 +221,32 @@ export default function BookingPage() {
       if (current.includes(seatId)) {
         return current.filter((item) => item !== seatId);
       }
-
       if (current.length >= 4) {
-        toast.error('You can book at most 4 tickets at a time.');
+        toast.error('You can book up to 4 tickets at a time.');
         return current;
       }
-
       return [...current, seatId];
     });
   };
 
-  const continueFromSeats = () => {
+  const confirmSeatsAndContinue = () => {
     if (!selectedSeats.length) {
-      toast.error('Pick at least one seat to continue.');
+      toast.error('Please select at least one seat.');
       return;
     }
-    setStep(3);
-  };
-
-  const continueFromPassenger = () => {
-    if (!passengerName.trim()) {
-      toast.error('Enter the passenger name before continuing.');
-      return;
-    }
-    setStep(4);
+    setSeatModalOpen(false);
+    setStep(2);
   };
 
   const confirmBooking = async () => {
     if (!trip || !boardingStop || !dropoffStop || !selectedSeats.length || !passengerName.trim()) {
-      toast.error('Complete each step before confirming the booking.');
+      toast.error('Please complete all required fields.');
       return;
     }
 
     setProcessing(true);
-
     try {
-      await ticketApi.create(
+      const checkout = await ticketApi.createCheckoutSession(
         {
           trip_id: trip.id,
           boarding_stop_id: boardingStop.id,
@@ -233,23 +257,16 @@ export default function BookingPage() {
         token
       );
 
-      const confirmation = {
-        routeName: route.route_name,
-        busName: trip.bus_name || `Bus ${trip.bus_id}`,
-        departure: trip.departure_time,
-        journeyLabel: `${boardingStop.stop_name} to ${dropoffStop.stop_name}`,
-        seatLabels: selectedSeatLabels,
-        totalPrice,
-        email: user?.email || '',
-      };
+      if (!checkout?.checkout_url) {
+        throw new Error('Payment gateway did not return a checkout URL.');
+      }
 
-      setSuccessState(confirmation);
-      setStep(5);
-      toast.success('Booking confirmed successfully.');
+      window.location.assign(checkout.checkout_url);
     } catch (error) {
-      toast.error(error?.response?.data?.message || 'Booking failed. Please try again.');
-    } finally {
+      toast.error(error?.response?.data?.message || 'Unable to start payment. Please try again.');
       setProcessing(false);
+    } finally {
+      // Keep processing state during Stripe redirect; reset only on error or callback completion.
     }
   };
 
@@ -257,70 +274,75 @@ export default function BookingPage() {
     <PageMotion>
       <section className="grid gap-8 xl:grid-cols-[1.25fr_0.75fr]">
         <div className="space-y-6">
+          {/* Header */}
           <div className="hero-card rounded-[36px] p-8 sm:p-10">
-            <p className="eyebrow">Ticket Booking</p>
-            <h1 className="section-title mt-4">
-              Rebuilt as a guided, production-style checkout.
-            </h1>
+            <p className="eyebrow">Fast Bus Booking</p>
+            <h1 className="section-title mt-4">Book your ticket in 3 easy steps</h1>
             <p className="section-subtitle mt-5 max-w-2xl">
-              Riders choose a route, select where they board and exit, pick a specific bus departure, reserve seats, review the fare, and confirm with clear feedback.
+              Select routes, pick your bus, choose seats, and confirm your booking. Simple, fast, secure.
             </p>
             <div className="mt-8">
               <StepProgress steps={steps} currentStep={step} />
             </div>
           </div>
 
-          {step === 0 ? (
+          {/* STEP 0: Choose Journey */}
+          {step === 0 && (
             <div className="shell-card rounded-[36px] p-6 sm:p-8">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="eyebrow">Step 1</p>
-                  <h2 className="mt-2 text-3xl font-extrabold tracking-[-0.03em] text-slate-100">
-                    Choose your route and journey
-                  </h2>
-                </div>
+              <div>
+                <p className="eyebrow">Step 1 of 3</p>
+                <h2 className="mt-2 text-3xl font-extrabold tracking-[-0.03em] text-slate-100">
+                  Where are you traveling?
+                </h2>
+                <p className="mt-2 text-sm text-slate-400">Select route and your stops</p>
               </div>
 
-              {routesLoading ? <div className="mt-6"><LoadingSkeleton rows={3} /></div> : null}
-              {routesError ? <div className="mt-6"><ErrorCard title="Could not load routes" description={routesError} onRetry={retry} /></div> : null}
+              {routesLoading && <div className="mt-6"><LoadingSkeleton rows={3} /></div>}
+              {routesError && <div className="mt-6"><ErrorCard title="Could not load routes" description={routesError} onRetry={retry} /></div>}
 
-              {!routesLoading && !routesError ? (
-                <div className="mt-6 grid gap-4 lg:grid-cols-2">
+              {!routesLoading && !routesError && (
+                <div className="mt-6 grid gap-3 lg:grid-cols-2">
                   {routes.map((item) => (
                     <button
                       key={item.id}
                       type="button"
                       onClick={() => handleRouteSelect(item)}
-                      className={`rounded-[28px] border p-5 text-left transition-all ${
+                      className={`group rounded-3xl border p-5 text-left transition-all ${
                         route?.id === item.id
-                          ? 'border-cyan-300/30 bg-cyan-400/10 shadow-[0_18px_38px_rgba(34,211,238,0.08)]'
-                          : 'border-white/10 bg-white/5 hover:border-cyan-300/20 hover:bg-cyan-400/8'
+                          ? 'border-cyan-400/40 bg-cyan-500/12 shadow-[0_18px_38px_rgba(34,211,238,0.12)]'
+                          : 'border-white/8 bg-white/3 hover:border-cyan-300/25 hover:bg-cyan-500/8'
                       }`}
                     >
-                      <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-cyan-300">Route</p>
-                      <p className="mt-3 text-xl font-bold tracking-[-0.02em] text-slate-100">{item.route_name}</p>
-                      <p className="mt-2 text-sm leading-6 text-slate-400">
-                        {item.start_point} to {item.end_point}
-                      </p>
-                      <p className="mt-3 text-xs font-semibold text-slate-500">
-                        {item.stops?.length || 0} stops available
-                      </p>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-cyan-300">Route</p>
+                          <p className="mt-2 font-bold text-slate-100">{item.route_name}</p>
+                          <p className="mt-1 text-xs text-slate-400">{item.start_point} → {item.end_point}</p>
+                        </div>
+                        <svg className="h-5 w-5 text-cyan-300 opacity-0 transition-opacity group-hover:opacity-100">
+                          <path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
+                        </svg>
+                      </div>
                     </button>
                   ))}
                 </div>
-              ) : null}
+              )}
 
-              {route ? (
-                <div className="mt-8 rounded-[28px] border border-white/10 bg-white/5 p-5">
+              {route && (
+                <div className="mt-8 rounded-[28px] border border-white/8 bg-white/3 p-5">
+                  <p className="mb-4 text-sm font-semibold text-slate-200">Select your journey</p>
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
-                      <label className="mb-2 block text-sm font-semibold text-slate-200">Boarding stop</label>
+                      <label htmlFor="boarding" className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-300">
+                        Boarding Stop
+                      </label>
                       <select
+                        id="boarding"
                         value={boardingStopId}
-                        onChange={(event) => setBoardingStopId(event.target.value)}
-                        className="field"
+                        onChange={(e) => setBoardingStopId(e.target.value)}
+                        className="field w-full bg-slate-900/50"
                       >
-                        <option value="">Select where you get on</option>
+                        <option value="">Choose stop</option>
                         {stops.map((stop) => (
                           <option key={stop.id} value={stop.id}>
                             {`${stop.stop_order}. ${stop.stop_name}`}
@@ -329,15 +351,18 @@ export default function BookingPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="mb-2 block text-sm font-semibold text-slate-200">Destination stop</label>
+                      <label htmlFor="dropoff" className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-300">
+                        Destination Stop
+                      </label>
                       <select
+                        id="dropoff"
                         value={dropoffStopId}
-                        onChange={(event) => setDropoffStopId(event.target.value)}
-                        className="field"
+                        onChange={(e) => setDropoffStopId(e.target.value)}
+                        className="field w-full bg-slate-900/50"
                       >
-                        <option value="">Select where you get off</option>
+                        <option value="">Choose stop</option>
                         {stops
-                          .filter((stop) => !boardingStop || stop.stop_order > boardingStop.stop_order)
+                          .filter((s) => !boardingStop || s.stop_order > boardingStop.stop_order)
                           .map((stop) => (
                             <option key={stop.id} value={stop.id}>
                               {`${stop.stop_order}. ${stop.stop_name}`}
@@ -347,181 +372,202 @@ export default function BookingPage() {
                     </div>
                   </div>
 
-                  {stopsLoading ? <div className="mt-5"><LoadingSkeleton rows={2} /></div> : null}
-                  {stopsError ? <div className="mt-5"><ErrorCard title="Could not load stops" description={stopsError} onRetry={() => handleRouteSelect(route)} /></div> : null}
+                  {stopsLoading && <p className="mt-4 text-sm text-slate-400">Loading stops...</p>}
+                  {stopsError && <div className="mt-4"><ErrorCard title="Error loading stops" description={stopsError} /></div>}
 
-                  <div className="mt-6 flex flex-wrap gap-3">
-                    <button type="button" onClick={continueFromJourney} className="btn-primary">
-                      Continue to bus selection
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setStep(1)}
+                      disabled={!route || !boardingStop || !dropoffStop || stopsLoading}
+                      className="btn-primary"
+                    >
+                      Next: Select Bus →
                     </button>
                     <button type="button" onClick={resetBooking} className="btn-secondary">
-                      Reset booking
+                      Clear
                     </button>
                   </div>
                 </div>
-              ) : null}
+              )}
             </div>
-          ) : null}
+          )}
 
-          {step === 1 ? (
+          {/* STEP 1: Select Bus & Seats */}
+          {step === 1 && (
             <div className="shell-card rounded-[36px] p-6 sm:p-8">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="eyebrow">Step 2</p>
+                  <p className="eyebrow">Step 2 of 3</p>
                   <h2 className="mt-2 text-3xl font-extrabold tracking-[-0.03em] text-slate-100">
-                    Select your bus departure
+                    Pick your bus
                   </h2>
+                  <p className="mt-2 text-sm text-slate-400">
+                    {boardingStop?.stop_name} to {dropoffStop?.stop_name}
+                  </p>
                 </div>
-                <button type="button" onClick={() => setStep(0)} className="btn-secondary">
-                  Back to journey
+                <button onClick={() => setStep(0)} className="btn-secondary text-sm">
+                  ← Back
                 </button>
               </div>
 
-              {tripLoading ? <div className="mt-6"><LoadingSkeleton rows={4} /></div> : null}
-              {tripError ? <div className="mt-6"><ErrorCard title="Could not load buses" description={tripError} onRetry={continueFromJourney} /></div> : null}
-              {!tripLoading && !tripError && tripOptions.length === 0 ? (
-                <div className="mt-6">
-                  <EmptyState title="No departures available" description="Try another route or a different journey segment." icon="🕒" />
-                </div>
-              ) : null}
+              {tripLoading && <div className="mt-6"><LoadingSkeleton rows={4} /></div>}
+              {tripError && <div className="mt-6"><ErrorCard title="Error loading buses" description={tripError} /></div>}
+              {!tripLoading && !tripError && tripOptions.length === 0 && (
+                <div className="mt-6"><EmptyState title="No buses available" description="Try different stops." icon="🚌" /></div>
+              )}
 
-              {!tripLoading && !tripError && tripOptions.length > 0 ? (
-                <div className="mt-6 grid gap-4 lg:grid-cols-2">
+              {!tripLoading && !tripError && tripOptions.length > 0 && (
+                <div className="mt-6 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                   {tripOptions.map((item) => (
                     <button
                       key={item.id}
+                      onClick={() => handleBusSelect(item)}
                       type="button"
-                      onClick={() => handleTripSelect(item)}
-                      className="rounded-[28px] border border-white/10 bg-white/5 p-5 text-left transition-all hover:border-cyan-300/20 hover:bg-cyan-400/8"
+                      className="group rounded-3xl border border-white/8 bg-white/3 p-4 text-left transition-all hover:border-emerald-300/30 hover:bg-emerald-500/8"
                     >
-                      <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start justify-between gap-2">
                         <div>
-                          <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-cyan-300">Bus</p>
-                          <h3 className="mt-3 text-xl font-bold tracking-[-0.02em] text-slate-100">
-                            {item.bus_name || `Bus ${item.bus_id}`}
-                          </h3>
+                          <p className="text-xs font-bold uppercase tracking-wider text-emerald-300">Bus</p>
+                          <p className="mt-1 font-bold text-slate-100">{item.bus_name || `Bus ${item.bus_id}`}</p>
                         </div>
-                        <span className="rounded-full bg-white/8 px-3 py-1 text-xs font-bold text-slate-300">
-                          {item.bus_status || 'scheduled'}
+                        <span className="rounded-full bg-emerald-500/20 px-2 py-1 text-xs font-bold text-emerald-200">
+                          {item.total_seats} seats
                         </span>
                       </div>
-
-                      <div className="mt-5 grid gap-3 text-sm text-slate-300 sm:grid-cols-2">
-                        <InfoPill label="Departure" value={formatTime(item.departure_time)} />
-                        <InfoPill label="Arrival" value={formatTime(item.arrival_time)} />
-                        <InfoPill label="Fare / seat" value={`৳ ${calculateSegmentPrice(item, boardingStop, dropoffStop, stops).toFixed(2)}`} />
-                        <InfoPill label="Capacity" value={`${item.total_seats} seats`} />
+                      <div className="mt-3 space-y-2 text-sm text-slate-400">
+                        <div className="flex justify-between">
+                          <span>Departs</span>
+                          <span className="font-semibold text-slate-200">{formatTime(item.departure_time)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Price/seat</span>
+                          <span className="font-semibold text-emerald-300">৳{calculateSegmentPrice(item, boardingStop, dropoffStop, stops)}</span>
+                        </div>
+                      </div>
+                      <div className="mt-3 text-center text-xs font-semibold text-emerald-200 opacity-0 transition-opacity group-hover:opacity-100">
+                        Click to select seats
                       </div>
                     </button>
                   ))}
                 </div>
-              ) : null}
+              )}
+
+              {/* Seat Selection Modal */}
+              {seatModalOpen && trip && (
+                <Modal isOpen={seatModalOpen} onClose={() => setSeatModalOpen(false)} title={`Select Seats - ${trip.bus_name || `Bus ${trip.bus_id}`}`}>
+                  <div className="space-y-6">
+                    <SeatSelector seats={seatsWithStatus} selected={selectedSeats} onToggle={onToggleSeat} />
+                    <div className="border-t border-white/10 pt-6">
+                      <div className="mb-4 flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3">
+                        <span className="text-sm font-semibold text-slate-300">Selected seats: {selectedSeats.length}</span>
+                        <span className="text-lg font-bold text-emerald-300">৳{(segmentPrice * selectedSeats.length).toFixed(2)}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={confirmSeatsAndContinue}
+                          disabled={selectedSeats.length === 0}
+                          className="btn-primary flex-1"
+                        >
+                          Confirm Seats
+                        </button>
+                        <button onClick={() => setSeatModalOpen(false)} className="btn-secondary flex-1">
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </Modal>
+              )}
             </div>
-          ) : null}
+          )}
 
-          {step === 2 ? (
-            <div className="space-y-5">
-              <SeatSelector seats={seatsWithStatus} selected={selectedSeats} onToggle={onToggleSeat} />
-              <div className="shell-card flex flex-wrap gap-3 rounded-[32px] p-5">
-                <button type="button" onClick={continueFromSeats} className="btn-primary">
-                  Continue to passenger details
-                </button>
-                <button type="button" onClick={() => setStep(1)} className="btn-secondary">
-                  Back to bus selection
-                </button>
-              </div>
-            </div>
-          ) : null}
+          {/* STEP 2: Confirm Booking */}
+          {step === 2 && !successState && (
+            <div className="space-y-6">
+              <div className="shell-card rounded-[36px] p-6 sm:p-8">
+                <p className="eyebrow">Step 3 of 3</p>
+                <h2 className="mt-2 text-3xl font-extrabold tracking-[-0.03em] text-slate-100">
+                  Complete your booking
+                </h2>
+                <p className="mt-2 text-sm text-slate-400">Enter passenger details and confirm</p>
 
-          {step === 3 ? (
-            <div className="shell-card rounded-[36px] p-6 sm:p-8">
-              <p className="eyebrow">Step 4</p>
-              <h2 className="mt-2 text-3xl font-extrabold tracking-[-0.03em] text-slate-100">
-                Passenger details
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-slate-400">
-                Confirm who is traveling. The booking account email is used as the verified contact for this purchase.
-              </p>
-
-              <div className="mt-6 grid gap-5 md:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-200">Passenger full name</label>
+                <div className="mt-6">
+                  <label htmlFor="name" className="mb-2 block text-sm font-semibold text-slate-200">
+                    Passenger Name
+                  </label>
                   <input
+                    id="name"
+                    type="text"
                     value={passengerName}
-                    onChange={(event) => setPassengerName(event.target.value)}
-                    placeholder="Passenger full name"
-                    className="field"
+                    onChange={(e) => setPassengerName(e.target.value)}
+                    placeholder="Full name"
+                    className="field w-full"
                   />
                 </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-200">Verified email</label>
+
+                <div className="mt-4">
+                  <label htmlFor="email" className="mb-2 block text-sm font-semibold text-slate-200">
+                    Confirmation Email
+                  </label>
                   <input
+                    id="email"
                     disabled
-                    value={user?.email || ''}
-                    className="field cursor-not-allowed bg-white/6 text-slate-400"
+                    value={user?.email || 'No email'}
+                    className="field w-full cursor-not-allowed bg-white/6 text-slate-400"
                   />
+                  <p className="mt-1 text-xs text-slate-400">Ticket will be sent here</p>
                 </div>
               </div>
 
-              <div className="mt-6 flex flex-wrap gap-3">
-                <button type="button" onClick={continueFromPassenger} className="btn-primary">
-                  Review booking
-                </button>
-                <button type="button" onClick={() => setStep(2)} className="btn-secondary">
-                  Back to seats
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {step === 4 ? (
-            <div className="shell-card rounded-[36px] p-6 sm:p-8">
-              <p className="eyebrow">Step 5</p>
-              <h2 className="mt-2 text-3xl font-extrabold tracking-[-0.03em] text-slate-100">
-                Review and confirm
-              </h2>
-
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
-                <SummaryCard label="Route" value={route?.route_name} />
-                <SummaryCard label="Journey" value={`${boardingStop?.stop_name} to ${dropoffStop?.stop_name}`} />
-                <SummaryCard label="Bus" value={trip?.bus_name || `Bus ${trip?.bus_id}`} />
-                <SummaryCard label="Departure" value={trip ? formatDateTime(trip.departure_time) : 'N/A'} />
-                <SummaryCard label="Seats" value={selectedSeatLabels || 'None'} />
-                <SummaryCard label="Passenger" value={passengerName || 'N/A'} />
-              </div>
-
-              <div className="mt-6 rounded-[28px] bg-slate-950 p-6 text-white">
-                <p className="text-sm text-slate-300">Total payable</p>
-                <p className="mt-2 text-4xl font-extrabold tracking-[-0.04em]">৳ {totalPrice}</p>
-                <p className="mt-2 text-sm text-slate-300">
-                  {selectedSeats.length} seat{selectedSeats.length === 1 ? '' : 's'} × ৳ {segmentPrice.toFixed(2)}
-                </p>
+              <div className="shell-card rounded-[36px] p-6 sm:p-8">
+                <p className="eyebrow">Order Review</p>
+                <div className="mt-5 space-y-4">
+                  <div className="flex justify-between py-2 border-b border-white/10">
+                    <span className="text-sm text-slate-400">Route</span>
+                    <span className="font-semibold text-slate-200">{route?.route_name}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-white/10">
+                    <span className="text-sm text-slate-400">Journey</span>
+                    <span className="font-semibold text-slate-200">{boardingStop?.stop_name} → {dropoffStop?.stop_name}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-white/10">
+                    <span className="text-sm text-slate-400">Bus</span>
+                    <span className="font-semibold text-slate-200">{trip?.bus_name || `Bus ${trip?.bus_id}`}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-white/10">
+                    <span className="text-sm text-slate-400">Seats</span>
+                    <span className="font-semibold text-slate-200">{selectedSeatLabels}</span>
+                  </div>
+                  <div className="flex justify-between py-3 border-t border-white/10 pt-4">
+                    <span className="font-semibold text-slate-300">Total Price</span>
+                    <span className="text-2xl font-extrabold text-emerald-300">৳{totalPrice}</span>
+                  </div>
+                </div>
               </div>
 
-              <div className="mt-6 flex flex-wrap gap-3">
+              <div className="flex gap-3">
                 <button
-                  type="button"
                   onClick={confirmBooking}
-                  disabled={processing}
-                  className="btn-primary"
+                  disabled={processing || !passengerName.trim()}
+                  className="btn-primary flex-1"
                 >
-                  {processing ? 'Confirming booking...' : 'Confirm and pay'}
+                  {processing ? 'Redirecting to payment...' : `Continue to Payment ৳${totalPrice}`}
                 </button>
-                <button type="button" onClick={() => setStep(3)} className="btn-secondary">
-                  Back to passenger details
+                <button onClick={() => setStep(1)} className="btn-secondary flex-1">
+                  Back
                 </button>
               </div>
             </div>
-          ) : null}
+          )}
 
-          {step === 5 && successState ? (
-            <div className="hero-card rounded-[36px] p-8 sm:p-10">
-              <p className="eyebrow">Booked</p>
-              <h2 className="mt-3 text-4xl font-extrabold tracking-[-0.04em] text-slate-100">
-                Your tickets are confirmed.
-              </h2>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
-                A verified booking was created for {successState.journeyLabel} on {successState.busName}. The account email {successState.email} remains the booking contact.
+          {/* SUCCESS STATE */}
+          {step === 3 && successState && (
+            <div className="hero-card rounded-[36px] p-8 sm:p-10 text-center">
+              <div className="text-6xl mb-4">✓</div>
+              <h2 className="text-4xl font-extrabold text-emerald-300">Booking Confirmed!</h2>
+              <p className="mt-4 text-base text-slate-400">
+                Your tickets are booked for <strong>{successState.journeyLabel}</strong> on <strong>{successState.busName}</strong>. Confirmation sent to {successState.email}.
               </p>
 
               <div className="mt-8 grid gap-4 md:grid-cols-2">
@@ -531,35 +577,36 @@ export default function BookingPage() {
                 <SummaryCard label="Seats" value={successState.seatLabels} />
               </div>
 
-              <div className="mt-8 flex flex-wrap gap-3">
-                <button type="button" onClick={resetBooking} className="btn-primary">
-                  Book another trip
+              <div className="mt-8 flex flex-wrap justify-center gap-3">
+                <button onClick={resetBooking} className="btn-primary">
+                  Book Another Trip
                 </button>
-                <button type="button" onClick={() => navigate('/tickets')} className="btn-secondary">
-                  View my tickets
+                <button onClick={() => navigate('/tickets')} className="btn-secondary">
+                  View My Tickets
                 </button>
               </div>
             </div>
-          ) : null}
+          )}
         </div>
 
+        {/* SIDEBAR */}
         <aside className="space-y-6">
           <div className="shell-card rounded-[36px] p-6">
             <p className="eyebrow">Booking Summary</p>
-            <div className="mt-5 space-y-4">
-              <SidebarBlock label="Route" value={route?.route_name || 'Choose a route'} />
-              <SidebarBlock label="Boarding" value={boardingStop?.stop_name || 'Select stop'} />
-              <SidebarBlock label="Destination" value={dropoffStop?.stop_name || 'Select stop'} />
+            <div className="mt-5 space-y-4 border-t border-white/10 pt-4">
+              <SidebarBlock label="Route" value={route?.route_name || 'Select route'} />
+              <SidebarBlock label="From" value={boardingStop?.stop_name || 'Select stop'} />
+              <SidebarBlock label="To" value={dropoffStop?.stop_name || 'Select stop'} />
               <SidebarBlock label="Bus" value={trip?.bus_name || (trip ? `Bus ${trip.bus_id}` : 'Select bus')} />
-              <SidebarBlock label="Seats" value={selectedSeatLabels || 'Select seats'} />
+              <SidebarBlock label="Seats" value={selectedSeatLabels || 'Not selected'} />
             </div>
           </div>
 
           <div className="rounded-[36px] bg-slate-950 p-6 text-white shadow-[0_30px_90px_rgba(15,23,42,0.18)]">
-            <p className="text-sm text-slate-300">Estimated total</p>
-            <p className="mt-2 text-4xl font-extrabold tracking-[-0.04em]">৳ {totalPrice}</p>
-            <p className="mt-3 text-sm leading-6 text-slate-300">
-              Segment-based pricing keeps the fare aligned to where the rider actually boards and exits.
+            <p className="text-sm text-slate-300">Estimated Total</p>
+            <p className="mt-2 text-4xl font-extrabold tracking-[-0.04em]">৳{totalPrice}</p>
+            <p className="mt-3 text-xs leading-6 text-slate-400">
+              {selectedSeats.length} seat{selectedSeats.length === 1 ? '' : 's'} at ৳{segmentPrice.toFixed(2)}/seat
             </p>
           </div>
         </aside>
@@ -569,29 +616,20 @@ export default function BookingPage() {
   );
 }
 
-function InfoPill({ label, value }) {
-  return (
-    <div className="rounded-[20px] bg-slate-50 px-4 py-3">
-      <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-slate-400">{label}</p>
-      <p className="mt-2 font-semibold text-slate-900">{value}</p>
-    </div>
-  );
-}
-
 function SummaryCard({ label, value }) {
   return (
-    <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-4">
+    <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
       <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-slate-400">{label}</p>
-      <p className="mt-2 text-base font-semibold text-slate-900">{value}</p>
+      <p className="mt-2 font-semibold text-slate-100">{value}</p>
     </div>
   );
 }
 
 function SidebarBlock({ label, value }) {
   return (
-    <div className="rounded-[24px] bg-slate-50 px-4 py-4">
+    <div>
       <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-slate-400">{label}</p>
-      <p className="mt-2 text-sm font-semibold text-slate-900">{value}</p>
+      <p className="mt-1 font-semibold text-slate-200">{value}</p>
     </div>
   );
 }

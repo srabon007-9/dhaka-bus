@@ -46,15 +46,30 @@ export const tripApi = {
 
 export const ticketApi = {
   list: async (token) => normalize(await api.get('/tickets', authConfig(token))),
-  getBookedSeats: async (tripId, boardingStopId, dropoffStopId) => normalize(
-    await api.get(`/tickets/trip/${tripId}/booked-seats`, {
-      params: {
-        boarding_stop_id: boardingStopId,
-        dropoff_stop_id: dropoffStopId,
-      },
-    })
-  ),
+  getBookedSeats: async (tripId, boardingStopId, dropoffStopId) => {
+    try {
+      return normalize(
+        await api.get(`/tickets/trip/${tripId}/booked-seats`, {
+          params: {
+            boarding_stop_id: boardingStopId,
+            dropoff_stop_id: dropoffStopId,
+          },
+        })
+      );
+    } catch (error) {
+      console.error('Error fetching booked seats:', error.message);
+      throw new Error(`Failed to fetch seat availability: ${error?.response?.data?.message || error.message}`);
+    }
+  },
   create: async (payload, token) => normalize(await api.post('/tickets', payload, authConfig(token))),
+  createCheckoutSession: async (payload, token) => {
+    const response = await api.post('/tickets/payment/checkout', payload, authConfig(token));
+    return response?.data?.data ?? response?.data;
+  },
+  completePayment: async (sessionId, token) => {
+    const response = await api.post('/tickets/payment/complete', { session_id: sessionId }, authConfig(token));
+    return response?.data?.data ?? response?.data;
+  },
   cancel: async (id, token) => normalize(await api.patch(`/tickets/${id}/cancel`, {}, authConfig(token))),
 };
 
