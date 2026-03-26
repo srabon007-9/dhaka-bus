@@ -8,7 +8,7 @@ import Button from '../common/Button';
 
 export default function PaymentVerificationPanel() {
   const { token } = useAuthContext();
-  const toast = useToast();
+  const { error: showError, success: showSuccess } = useToast();
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPayment, setSelectedPayment] = useState(null);
@@ -16,31 +16,33 @@ export default function PaymentVerificationPanel() {
   const [notes, setNotes] = useState('');
   const [verifying, setVerifying] = useState(false);
 
-  const fetchPendingPayments = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch('/api/tickets/admin/payments/pending', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+  const fetchPendingPayments = useCallback(async ({ showLoading = false } = {}) => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
 
-      if (!response.ok) throw new Error('Failed to fetch payments');
-      const data = await response.json();
-      setPayments(data.data || []);
+    if (showLoading) {
+      setLoading(true);
+    }
+
+    try {
+      const data = await ticketApi.getPendingPayments(token);
+      setPayments(Array.isArray(data) ? data : []);
     } catch (error) {
-      toast.error('Failed to load pending payments');
+      showError('Failed to load pending payments');
       console.error(error);
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
-  }, [token, toast]);
+  }, [token, showError]);
 
   useEffect(() => {
-    fetchPendingPayments();
+    fetchPendingPayments({ showLoading: true });
     // Refresh every 30 seconds
-    const interval = setInterval(fetchPendingPayments, 30000);
+    const interval = setInterval(() => fetchPendingPayments(), 30000);
     return () => clearInterval(interval);
   }, [fetchPendingPayments]);
 
@@ -61,27 +63,15 @@ export default function PaymentVerificationPanel() {
 
     setVerifying(true);
     try {
-      const response = await fetch(
-        `/api/tickets/admin/payments/${selectedPayment.payment_id}/verify`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ notes }),
-        }
-      );
 
-      if (!response.ok) throw new Error('Verification failed');
-
-      toast.success('Payment verified successfully!');
+      await ticketApi.verifyPayment(selectedPayment.payment_id, notes, token);
+      showSuccess('Payment verified successfully!');
       setIsModalOpen(false);
       setSelectedPayment(null);
       setNotes('');
       fetchPendingPayments();
     } catch (error) {
-      toast.error(`Verification failed: ${error.message}`);
+      showError(`Verification failed: ${error.message}`);
     } finally {
       setVerifying(false);
     }
@@ -92,27 +82,15 @@ export default function PaymentVerificationPanel() {
 
     setVerifying(true);
     try {
-      const response = await fetch(
-        `/api/tickets/admin/payments/${selectedPayment.payment_id}/reject`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ notes }),
-        }
-      );
 
-      if (!response.ok) throw new Error('Rejection failed');
-
-      toast.success('Payment rejected successfully!');
+      await ticketApi.rejectPayment(selectedPayment.payment_id, notes, token);
+      showSuccess('Payment rejected successfully!');
       setIsModalOpen(false);
       setSelectedPayment(null);
       setNotes('');
       fetchPendingPayments();
     } catch (error) {
-      toast.error(`Rejection failed: ${error.message}`);
+      showError(`Rejection failed: ${error.message}`);
     } finally {
       setVerifying(false);
     }
@@ -154,10 +132,11 @@ export default function PaymentVerificationPanel() {
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">
                     {payment.amount} {payment.currency?.toUpperCase()}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-700 capitalize">{payment.payment_method}</td>
+                  <td className="px-6 py-4 text-sm text-gray-700 capitalize">{payment.method || payment.payment_method}</td>
                   <td className="px-6 py-4 text-sm">
                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                       payment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                      payment.status === 'expired' ? 'bg-orange-100 text-orange-800' :
                       payment.status === 'verified' ? 'bg-green-100 text-green-800' :
                       'bg-red-100 text-red-800'
                     }`}>

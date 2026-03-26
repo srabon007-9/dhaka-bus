@@ -38,6 +38,85 @@ const toPositiveInt = (value) => {
 };
 
 const normalizePrice = (value) => Number(Number(value).toFixed(2));
+const normalizePassengerName = (value) => String(value || '').trim();
+
+const normalizePassengerDetails = (passengerDetails, normalizedSeats, fallbackPassengerName = '') => {
+  const seatSet = new Set(normalizedSeats);
+
+  if (Array.isArray(passengerDetails) && passengerDetails.length > 0) {
+    const seatMap = new Map();
+
+    passengerDetails.forEach((detail) => {
+      const seatNumber = toPositiveInt(detail?.seat_number);
+      const passengerName = normalizePassengerName(detail?.passenger_name || detail?.name);
+
+      if (!seatNumber || !seatSet.has(seatNumber)) {
+        throw new TicketValidationError('Each passenger detail must reference a valid selected seat', 400);
+      }
+
+      if (!passengerName) {
+        throw new TicketValidationError('Each seat passenger must have a name', 400);
+      }
+
+      seatMap.set(seatNumber, {
+        seat_number: seatNumber,
+        passenger_name: passengerName,
+      });
+    });
+
+    if (seatMap.size !== normalizedSeats.length) {
+      throw new TicketValidationError('Passenger details must be provided for every selected seat', 400);
+    }
+
+    return normalizedSeats.map((seat) => seatMap.get(seat));
+  }
+
+  const fallbackName = normalizePassengerName(fallbackPassengerName);
+  if (!fallbackName) {
+    throw new TicketValidationError('passenger_name or passenger_details are required', 400);
+  }
+
+  return normalizedSeats.map((seat) => ({
+    seat_number: seat,
+    passenger_name: fallbackName,
+  }));
+};
+
+const appendSeatPassengers = async (connection, tickets) => {
+  if (!Array.isArray(tickets) || tickets.length === 0) return tickets;
+
+  const ticketIds = [...new Set(tickets.map((ticket) => ticket.id).filter(Boolean))];
+  if (ticketIds.length === 0) return tickets;
+
+  const [seatRows] = await connection.query(
+    `SELECT ticket_id, seat_number, passenger_name
+     FROM ticket_seats
+     WHERE ticket_id IN (?)
+     ORDER BY ticket_id ASC, seat_number ASC`,
+    [ticketIds]
+  );
+
+  const seatsByTicketId = new Map();
+  seatRows.forEach((row) => {
+    if (!seatsByTicketId.has(row.ticket_id)) {
+      seatsByTicketId.set(row.ticket_id, []);
+    }
+    seatsByTicketId.get(row.ticket_id).push({
+      seat_number: row.seat_number,
+      passenger_name: row.passenger_name,
+    });
+  });
+
+  return tickets.map((ticket) => {
+    const passengerDetails = seatsByTicketId.get(ticket.id) || [];
+    const primaryPassenger = passengerDetails[0]?.passenger_name || ticket.passenger_name || '';
+    return {
+      ...ticket,
+      passenger_name: primaryPassenger,
+      passenger_details: passengerDetails,
+    };
+  });
+};
 
 const getSegmentMetadata = async (connection, tripId, boardingStopId, dropoffStopId, lockTrip = false) => {
   const [trips] = await connection.query(
@@ -118,7 +197,7 @@ const getTicketsByUserId = async (userId) => {
      ORDER BY tk.created_at DESC`,
     [userId]
   );
-  return rows;
+  return appendSeatPassengers(pool, rows);
 };
 
 const getAllTickets = async () => {
@@ -135,7 +214,7 @@ const getAllTickets = async () => {
      JOIN bus_stops dropoff ON dropoff.id = tk.dropoff_stop_id
      ORDER BY tk.created_at DESC`
   );
-  return rows;
+  return appendSeatPassengers(pool, rows);
 };
 
 const getBookedSeatsByTripId = async (tripId, boardingStopId, dropoffStopId) => {
@@ -221,11 +300,13 @@ const getBookingQuote = async ({ trip_id, boarding_stop_id, dropoff_stop_id, sea
   };
 };
 
-const reserveTicket = async ({ user_id, trip_id, boarding_stop_id, dropoff_stop_id, seat_numbers, passenger_name }) => {
+const reserveTicket = async ({ user_id, trip_id, boarding_stop_id, dropoff_stop_id, seat_numbers, passenger_name, passenger_details }) => {
   const normalizedSeats = normalizeSeatNumbers(seat_numbers);
   if (!normalizedSeats.length) {
     throw new TicketValidationError('At least one valid seat number is required', 400);
   }
+
+  const normalizedPassengers = normalizePassengerDetails(passenger_details, normalizedSeats, passenger_name);
 
   const connection = await pool.getConnection();
 
@@ -275,6 +356,8 @@ const reserveTicket = async ({ user_id, trip_id, boarding_stop_id, dropoff_stop_
 
     const segmentFare = normalizePrice((Number(trip.fare) * segmentLength) / totalSegments);
     const total_price = normalizePrice(segmentFare * normalizedSeats.length);
+    const primaryPassengerName = normalizedPassengers[0]?.passenger_name || normalizePassengerName(passenger_name);
+
     const [result] = await connection.query(
       `INSERT INTO tickets (user_id, trip_id, boarding_stop_id, dropoff_stop_id, seat_numbers, passenger_name, total_price)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -284,9 +367,21 @@ const reserveTicket = async ({ user_id, trip_id, boarding_stop_id, dropoff_stop_
         normalizedBoardingStopId,
         normalizedDropoffStopId,
         JSON.stringify(normalizedSeats),
-        passenger_name,
+        primaryPassengerName,
         total_price,
       ]
+    );
+
+    const passengerRows = normalizedPassengers.map((passenger) => [
+      result.insertId,
+      passenger.seat_number,
+      passenger.passenger_name,
+    ]);
+
+    await connection.query(
+      `INSERT INTO ticket_seats (ticket_id, seat_number, passenger_name)
+       VALUES ?`,
+      [passengerRows]
     );
 
     await connection.commit();
@@ -295,6 +390,8 @@ const reserveTicket = async ({ user_id, trip_id, boarding_stop_id, dropoff_stop_
       total_price,
       segment_fare: segmentFare,
       seat_numbers: normalizedSeats,
+      passenger_name: primaryPassengerName,
+      passenger_details: normalizedPassengers,
       boarding_stop_name: boardingStop.stop_name,
       dropoff_stop_name: dropoffStop.stop_name,
     };
@@ -331,7 +428,9 @@ const getTicketById = async (id) => {
     [id]
   );
 
-  return rows[0] || null;
+  if (!rows[0]) return null;
+  const [ticket] = await appendSeatPassengers(pool, [rows[0]]);
+  return ticket;
 };
 
 module.exports = {

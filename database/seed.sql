@@ -14,6 +14,8 @@ USE dhaka_bus;
 
 -- Clear existing data (safe during development)
 SET FOREIGN_KEY_CHECKS = 0;
+TRUNCATE TABLE passenger_events;
+TRUNCATE TABLE ticket_seats;
 TRUNCATE TABLE tickets;
 TRUNCATE TABLE trips;
 TRUNCATE TABLE locations;

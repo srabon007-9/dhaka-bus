@@ -290,6 +290,68 @@ Backend maintains 10 MySQL connection pool
 
 ---
 
+## 🔒 Concurrency Control Proof (Step 3)
+
+The project now includes a repeatable race-condition test script:
+
+```bash
+./database/concurrency_seat_race_test.sh
+```
+
+What the script does:
+- Logs in as `user@dhakabus.com`
+- Picks one scheduled trip and adjacent stops
+- Sends two concurrent `POST /api/tickets` requests for the **same seat**
+- Verifies expected outcome: exactly one success (`201`) and one conflict (`409`)
+
+Latest run result:
+
+```text
+--- Request A ---
+{"success":false,"message":"Seat 38 is already booked"}
+HTTP_STATUS:409
+
+--- Request B ---
+{"success":true,"data":{"id":21,...},"message":"Ticket booked successfully"}
+HTTP_STATUS:201
+
+PASS: Concurrency control is working (one success, one conflict).
+```
+
+Why this matters:
+- Confirms transaction + locking behavior prevents double-booking under concurrent requests.
+- Demonstrates isolation in a realistic booking race, which is a key database-course objective.
+
+---
+
+## 👥 Role-Based Database Accounts (Step 8)
+
+Implemented least-privilege MySQL users with scoped grants:
+
+- dhaka_runtime_rw: runtime API account with only SELECT, INSERT, UPDATE, DELETE, EXECUTE on dhaka_bus
+- dhaka_analytics_ro: reporting/analytics read-only account with SELECT, SHOW VIEW on dhaka_bus
+- dhaka_schema_admin: migration account with DDL and operational privileges scoped to dhaka_bus
+
+Migration files:
+- database/migrations/20260327_db_role_accounts.sql
+- database/migrations/20260327_db_role_accounts_readable.sql
+- database/migrations/20260327_drop_legacy_db_users.sql
+
+Backend runtime connection switched from root to application account via Docker environment variables:
+- DB_USER defaults to dhaka_runtime_rw
+- DB_PASSWORD defaults to dhaka_runtime_rw_pass_2026
+
+Verification completed:
+- SHOW GRANTS confirms all three accounts and privilege sets.
+- Backend login API remains functional after switching to least-privilege account.
+- Legacy account names were removed; only readable role names remain.
+
+Why this matters:
+- Reduces blast radius if app credentials are leaked.
+- Demonstrates principle of least privilege, a core database security practice.
+
+---
+
 ## 📝 Conclusion
 
 **YES, this is absolutely a professional database project!**

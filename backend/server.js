@@ -77,6 +77,7 @@ app.set('io', io);
 
 // Global variable to hold bus simulator instances
 let busSimulators = {};
+let liveBroadcastInterval = null;
 
 const enrichLocationsWithSimulatorState = (locations) => {
   if (!Array.isArray(locations)) return [];
@@ -172,15 +173,9 @@ io.on('connection', async (socket) => {
     const latest = await locationModel.getLatestLocations();
     socket.emit('locations:snapshot', enrichLocationsWithSimulatorState(latest));
 
-    // Emit locations every 3 seconds (syncs with bus movement)
-    const emitInterval = setInterval(() => {
-      emitLatestLocations();
-    }, 3000);
-
     // Cleanup on disconnect
     socket.on('disconnect', () => {
       console.log(`👤 Client disconnected: ${socket.id}`);
-      clearInterval(emitInterval);
     });
   } catch (error) {
     console.error('Error in Socket.IO connection:', error.message);
@@ -245,10 +240,21 @@ httpServer.listen(PORT, async () => {
 
   // Initialize bus simulations after server starts
   await initializeBusSimulations();
+
+  // Emit one shared live snapshot for all clients every 3 seconds.
+  if (!liveBroadcastInterval) {
+    liveBroadcastInterval = setInterval(() => {
+      emitLatestLocations();
+    }, 3000);
+  }
 });
 
 process.on('SIGINT', () => {
   console.log('\n\n🛑 Shutting down server...');
+
+  if (liveBroadcastInterval) {
+    clearInterval(liveBroadcastInterval);
+  }
 
   // Stop all bus simulators
   Object.values(busSimulators).forEach((simulator) => {

@@ -46,8 +46,24 @@ export default function useLiveTracking() {
       withCredentials: true,
     });
 
+    let fallbackTimer = null;
+
+    const stopFallbackPolling = () => {
+      if (fallbackTimer) {
+        clearInterval(fallbackTimer);
+        fallbackTimer = null;
+      }
+    };
+
+    const startFallbackPolling = () => {
+      if (!fallbackTimer) {
+        fallbackTimer = setInterval(refreshLocations, 15000);
+      }
+    };
+
     socket.on('connect', () => {
       setError('');
+      stopFallbackPolling();
       console.log('Socket connected successfully');
     });
 
@@ -69,15 +85,14 @@ export default function useLiveTracking() {
     socket.on('connect_error', (error) => {
       console.error('Socket connection error:', error);
       setError('Live tracking paused - connecting to server...');
+      startFallbackPolling();
       refreshLocations().catch(() => {
         setError('Live tracking offline - backend is unreachable');
       });
     });
 
-    const fallbackTimer = setInterval(refreshLocations, 15000);
-
     return () => {
-      clearInterval(fallbackTimer);
+      stopFallbackPolling();
       socket.disconnect();
     };
   }, []);

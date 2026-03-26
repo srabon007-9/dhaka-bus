@@ -3,6 +3,7 @@ import AdminLayout from '../layouts/AdminLayout';
 import DataTable from '../components/admin/DataTable';
 import Modal from '../components/common/Modal';
 import PaymentVerificationPanel from '../components/admin/PaymentVerificationPanel';
+import PassengerFlowPanel from '../components/admin/PassengerFlowPanel';
 import useLiveTracking from '../hooks/useLiveTracking';
 import { busApi, routeApi, tripApi } from '../services/api';
 import useToast from '../hooks/useToast';
@@ -300,6 +301,15 @@ export default function AdminPage() {
         <div className="space-y-4">
           <h2 className="text-2xl font-semibold text-white">Manual Payment Verification</h2>
           <PaymentVerificationPanel />
+        </div>
+      );
+    }
+
+    if (active === 'Passenger Flow') {
+      return (
+        <div className="space-y-4">
+          <h2 className="text-2xl font-semibold text-white">Passenger Flow</h2>
+          <PassengerFlowPanel />
         </div>
       );
     }

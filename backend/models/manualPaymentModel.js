@@ -130,10 +130,14 @@ class ManualPaymentModel {
       SELECT 
         mp.*,
         u.email,
-        u.name
+        u.name,
+        CASE
+          WHEN mp.expires_at <= NOW() THEN 'expired'
+          ELSE mp.status
+        END AS admin_status
       FROM manual_payments mp
       LEFT JOIN users u ON mp.user_id = u.id
-      WHERE mp.status = 'pending' AND mp.expires_at > NOW()
+      WHERE mp.status = 'pending'
       ORDER BY mp.created_at DESC 
       LIMIT ?
     `;

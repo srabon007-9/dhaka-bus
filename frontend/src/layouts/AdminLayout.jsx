@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Sidebar from '../components/Sidebar';
 
-const sections = ['Buses', 'Routes', 'Trips', 'Payments'];
+const sections = ['Buses', 'Routes', 'Trips', 'Payments', 'Passenger Flow'];
 
 export default function AdminLayout({ children }) {
   const [active, setActive] = useState('Buses');

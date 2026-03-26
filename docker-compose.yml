@@ -58,8 +58,8 @@ services:
     environment:
       PORT: 3000
       DB_HOST: mysql # Service name in this compose file
-      DB_USER: root
-      DB_PASSWORD: password
+      DB_USER: ${DB_USER:-dhaka_runtime_rw}
+      DB_PASSWORD: ${DB_PASSWORD:-dhaka_runtime_rw_pass_2026}
       DB_NAME: dhaka_bus
       FRONTEND_URL: http://localhost
       # Optional SMTP settings for verification emails

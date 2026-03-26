@@ -66,6 +66,7 @@ export default function BookingPage() {
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [seatModalOpen, setSeatModalOpen] = useState(false);
   const [passengerName, setPassengerName] = useState(user?.name || '');
+  const [passengerDetailsBySeat, setPassengerDetailsBySeat] = useState({});
   const [processing, setProcessing] = useState(false);
   const [successState, setSuccessState] = useState(null);
 
@@ -89,6 +90,20 @@ export default function BookingPage() {
 
   const totalPrice = (segmentPrice * selectedSeats.length).toFixed(2);
   const selectedSeatLabels = selectedSeats.map((seat) => `S${seat}`).join(', ');
+  const passengerDetails = selectedSeats.map((seatNumber) => ({
+    seat_number: seatNumber,
+    passenger_name: (passengerDetailsBySeat[seatNumber] || '').trim(),
+  }));
+
+  useEffect(() => {
+    setPassengerDetailsBySeat((current) => {
+      const next = {};
+      selectedSeats.forEach((seat) => {
+        next[seat] = current[seat] || '';
+      });
+      return next;
+    });
+  }, [selectedSeats]);
 
   useEffect(() => {
     const search = new URLSearchParams(window.location.search);
@@ -150,6 +165,7 @@ export default function BookingPage() {
     setBookedSeats([]);
     setSelectedSeats([]);
     setPassengerName(user?.name || '');
+    setPassengerDetailsBySeat({});
     setProcessing(false);
     setSuccessState(null);
     setSeatModalOpen(false);
@@ -166,6 +182,7 @@ export default function BookingPage() {
     setTrip(null);
     setBookedSeats([]);
     setSelectedSeats([]);
+    setPassengerDetailsBySeat({});
     setSuccessState(null);
 
     try {
@@ -185,6 +202,7 @@ export default function BookingPage() {
       setTripOptions([]);
       setBookedSeats([]);
       setSelectedSeats([]);
+      setPassengerDetailsBySeat({});
       setTripLoading(true);
       setTripError('');
 
@@ -203,6 +221,7 @@ export default function BookingPage() {
   const handleBusSelect = async (tripItem) => {
     setTrip(tripItem);
     setSelectedSeats([]);
+    setPassengerDetailsBySeat({});
     try {
       const reserved = await ticketApi.getBookedSeats(tripItem.id, boardingStop.id, dropoffStop.id);
       setBookedSeats(
@@ -229,6 +248,13 @@ export default function BookingPage() {
     });
   };
 
+  const updatePassengerForSeat = (seatNumber, value) => {
+    setPassengerDetailsBySeat((current) => ({
+      ...current,
+      [seatNumber]: value,
+    }));
+  };
+
   const confirmSeatsAndContinue = () => {
     if (!selectedSeats.length) {
       toast.error('Please select at least one seat.');
@@ -239,10 +265,18 @@ export default function BookingPage() {
   };
 
   const confirmBooking = async () => {
-    if (!trip || !boardingStop || !dropoffStop || !selectedSeats.length || !passengerName.trim()) {
+    if (!trip || !boardingStop || !dropoffStop || !selectedSeats.length) {
       toast.error('Please complete all required fields.');
       return;
     }
+
+    const missingPassengerSeat = passengerDetails.find((item) => !item.passenger_name);
+    if (missingPassengerSeat) {
+      toast.error(`Please enter passenger name for seat S${missingPassengerSeat.seat_number}.`);
+      return;
+    }
+
+    const primaryPassengerName = passengerDetails[0]?.passenger_name || passengerName.trim() || user?.name || '';
 
     setProcessing(true);
     try {
@@ -252,7 +286,8 @@ export default function BookingPage() {
           boarding_stop_id: boardingStop.id,
           dropoff_stop_id: dropoffStop.id,
           seat_numbers: selectedSeats,
-          passenger_name: passengerName.trim(),
+          passenger_name: primaryPassengerName,
+          passenger_details: passengerDetails,
         },
         token
       );
@@ -528,17 +563,26 @@ export default function BookingPage() {
                 <p className="mt-2 text-sm text-slate-400">Enter passenger details and confirm</p>
 
                 <div className="mt-6">
-                  <label htmlFor="name" className="mb-2 block text-sm font-semibold text-slate-200">
-                    Passenger Name
+                  <label className="mb-2 block text-sm font-semibold text-slate-200">
+                    Passenger Names (Per Seat)
                   </label>
-                  <input
-                    id="name"
-                    type="text"
-                    value={passengerName}
-                    onChange={(e) => setPassengerName(e.target.value)}
-                    placeholder="Full name"
-                    className="field w-full"
-                  />
+                  <div className="space-y-3">
+                    {selectedSeats.map((seat) => (
+                      <div key={seat} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                        <label htmlFor={`seat-passenger-${seat}`} className="mb-2 block text-xs font-bold uppercase tracking-wider text-cyan-200">
+                          Seat S{seat}
+                        </label>
+                        <input
+                          id={`seat-passenger-${seat}`}
+                          type="text"
+                          value={passengerDetailsBySeat[seat] || ''}
+                          onChange={(e) => updatePassengerForSeat(seat, e.target.value)}
+                          placeholder={`Passenger name for seat S${seat}`}
+                          className="field w-full"
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="mt-4">
@@ -584,7 +628,7 @@ export default function BookingPage() {
               <div className="flex gap-3">
                 <button
                   onClick={confirmBooking}
-                  disabled={processing || !passengerName.trim()}
+                  disabled={processing || passengerDetails.some((item) => !item.passenger_name)}
                   className="btn-primary flex-1"
                 >
                   {processing ? 'Redirecting to payment...' : `Continue to Payment ৳${totalPrice}`}
