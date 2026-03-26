@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import AdminLayout from '../layouts/AdminLayout';
 import DataTable from '../components/admin/DataTable';
 import Modal from '../components/common/Modal';
+import PaymentVerificationPanel from '../components/admin/PaymentVerificationPanel';
 import useLiveTracking from '../hooks/useLiveTracking';
 import { busApi, routeApi, tripApi } from '../services/api';
 import useToast from '../hooks/useToast';
@@ -13,6 +14,7 @@ export default function AdminPage() {
   const { token } = useAuthContext();
   const { buses, routes, retry } = useLiveTracking();
   const [trips, setTrips] = useState([]);
+  const [activeTab, setActiveTab] = useState('Buses');
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formType, setFormType] = useState('bus');
@@ -294,6 +296,15 @@ export default function AdminPage() {
       );
     }
 
+    if (active === 'Payments') {
+      return (
+        <div className="space-y-4">
+          <h2 className="text-2xl font-semibold text-white">Manual Payment Verification</h2>
+          <PaymentVerificationPanel />
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -319,7 +330,29 @@ export default function AdminPage() {
 
   return (
     <PageMotion>
-      <AdminLayout>{renderPanel}</AdminLayout>
+      <AdminLayout>
+        <div className="space-y-6">
+          {/* Tab Navigation */}
+          <div className="flex gap-2 border-b border-slate-700">
+            {['Buses', 'Routes', 'Trips', 'Payments'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-2 font-semibold transition-colors ${
+                  activeTab === tab
+                    ? 'text-cyan-500 border-b-2 border-cyan-500'
+                    : 'text-slate-400 hover:text-slate-300'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab Content */}
+          {renderPanel(activeTab)}
+        </div>
+      </AdminLayout>
 
       <Modal
         title={formType === 'bus' ? `${editingId ? 'Edit' : 'Add'} Bus` : formType === 'route' ? `${editingId ? 'Edit' : 'Add'} Route` : `${editingId ? 'Edit' : 'Add'} Trip`}
