@@ -2,10 +2,20 @@ const express = require('express');
 const crypto = require('crypto');
 const ticketModel = require('../models/ticketModel');
 const nagadPaymentModel = require('../models/nagadPaymentModel');
+const manualPaymentModel = require('../models/manualPaymentModel');
 const userModel = require('../models/userModel');
 const { verifyToken } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Payment Mode Configuration
+const PAYMENT_MODE = (process.env.PAYMENT_MODE || 'manual-both').toLowerCase();
+
+// Manual Payment Configuration (Personal Accounts)
+const BKASH_PERSONAL_NUMBER = process.env.BKASH_PERSONAL_NUMBER || '';
+const BKASH_PERSONAL_NAME = process.env.BKASH_PERSONAL_NAME || 'Dhaka Bus';
+const NAGAD_PERSONAL_NUMBER = process.env.NAGAD_PERSONAL_NUMBER || '';
+const NAGAD_PERSONAL_NAME = process.env.NAGAD_PERSONAL_NAME || 'Dhaka Bus';
 
 // Nagad Configuration
 const NAGAD_MERCHANT_ID = process.env.NAGAD_MERCHANT_ID || '';
@@ -152,13 +162,6 @@ router.get('/trip/:tripId/booked-seats', async (req, res) => {
 
 router.post('/payment/checkout', verifyToken, async (req, res) => {
   try {
-    if (!NAGAD_MERCHANT_ID || !NAGAD_MERCHANT_KEY) {
-      return res.status(503).json({
-        success: false,
-        message: 'Nagad payment gateway is not configured on the server',
-      });
-    }
-
     const payload = parseBookingPayload(req.body);
     ensureBookingPayload(payload);
 
@@ -172,9 +175,71 @@ router.post('/payment/checkout', verifyToken, async (req, res) => {
     }
 
     const quote = await ticketModel.getBookingQuote(payload);
-    const paymentRefId = nagadPaymentModel.generatePaymentRefId();
 
-    // Create Nagad payment record
+    // ============ MANUAL PAYMENT MODE ============
+    if (PAYMENT_MODE.includes('manual')) {
+      const paymentId = await manualPaymentModel.createPendingPayment({
+        paymentMethod: PAYMENT_MODE === 'manual-both' ? 'both' : PAYMENT_MODE.replace('manual-', ''),
+        amount: quote.total_price,
+        currency: PAYMENT_CURRENCY,
+        bookingPayload: {
+          user_id: req.user.id,
+          trip_id: payload.trip_id,
+          boarding_stop_id: payload.boarding_stop_id,
+          dropoff_stop_id: payload.dropoff_stop_id,
+          seat_numbers: quote.seat_numbers,
+          passenger_name: payload.passenger_name,
+        },
+        userId: req.user.id,
+      });
+
+      const paymentMethods = [];
+
+      if (PAYMENT_MODE === 'manual-both' || PAYMENT_MODE === 'manual-bkash') {
+        if (BKASH_PERSONAL_NUMBER) {
+          paymentMethods.push({
+            method: 'bkash',
+            accountName: BKASH_PERSONAL_NAME,
+            accountNumber: BKASH_PERSONAL_NUMBER,
+            instruction: `Send ${quote.total_price} BDT to ${BKASH_PERSONAL_NAME} (${BKASH_PERSONAL_NUMBER}) via bKash. Reference: ${paymentId}`,
+          });
+        }
+      }
+
+      if (PAYMENT_MODE === 'manual-both' || PAYMENT_MODE === 'manual-nagad') {
+        if (NAGAD_PERSONAL_NUMBER) {
+          paymentMethods.push({
+            method: 'nagad',
+            accountName: NAGAD_PERSONAL_NAME,
+            accountNumber: NAGAD_PERSONAL_NUMBER,
+            instruction: `Send ${quote.total_price} BDT to ${NAGAD_PERSONAL_NAME} (${NAGAD_PERSONAL_NUMBER}) via Nagad. Reference: ${paymentId}`,
+          });
+        }
+      }
+
+      return res.status(201).json({
+        success: true,
+        message: 'Manual payment initiated - Send money to confirm booking',
+        data: {
+          payment_id: paymentId,
+          amount: quote.total_price,
+          currency: PAYMENT_CURRENCY,
+          seats: quote.seat_numbers,
+          paymentMethods,
+          expiresIn: '30 minutes',
+        },
+      });
+    }
+
+    // ============ NAGAD MERCHANT MODE ============
+    if (PAYMENT_MODE === 'nagad' && (!NAGAD_MERCHANT_ID || !NAGAD_MERCHANT_KEY)) {
+      return res.status(503).json({
+        success: false,
+        message: 'Nagad payment gateway is not configured on the server',
+      });
+    }
+
+    const paymentRefId = nagadPaymentModel.generatePaymentRefId();
     await nagadPaymentModel.createPendingPayment({
       paymentRefId,
       merchantId: NAGAD_MERCHANT_ID,
@@ -191,7 +256,6 @@ router.post('/payment/checkout', verifyToken, async (req, res) => {
       userId: req.user.id,
     });
 
-    // Generate Nagad payment payload
     const nagadPayload = {
       merchantId: NAGAD_MERCHANT_ID,
       orderId: paymentRefId,
@@ -203,7 +267,6 @@ router.post('/payment/checkout', verifyToken, async (req, res) => {
       additionalMerchantId: '',
     };
 
-    // Generate signature
     const keyString = Object.keys(nagadPayload)
       .sort()
       .map((key) => `${key}=${nagadPayload[key]}`)
@@ -232,7 +295,7 @@ router.post('/payment/checkout', verifyToken, async (req, res) => {
     }
     return res.status(500).json({
       success: false,
-      message: 'Failed to create Nagad checkout session',
+      message: 'Failed to create payment checkout session',
       error: error.message,
     });
   }
@@ -408,7 +471,203 @@ router.patch('/:id/cancel', verifyToken, async (req, res) => {
   }
 });
 
-// Initialize Nagad payment model on startup
+// ========== MANUAL PAYMENT ENDPOINTS ==========
+
+/**
+ * Complete manual payment after user confirms they sent money
+ * In real flow, admin would verify and call mark-verified
+ */
+router.post('/payment/manual/complete', verifyToken, async (req, res) => {
+  try {
+    const { payment_id } = req.body;
+    if (!payment_id) {
+      return res.status(400).json({ success: false, message: 'payment_id is required' });
+    }
+
+    const payment = await manualPaymentModel.getPaymentById(payment_id);
+    if (!payment) {
+      return res.status(404).json({ success: false, message: 'Payment not found' });
+    }
+
+    if (payment.user_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+
+    if (payment.status === 'verified') {
+      // Admin already verified, create ticket now
+      const bookingPayload = payment.booking_payload;
+      const ticket = await ticketModel.reserveTicket(bookingPayload);
+      await manualPaymentModel.markPaymentCompleted(payment_id);
+
+      const savedTicket = await ticketModel.getTicketById(ticket.id);
+      return res.status(201).json({
+        success: true,
+        message: 'Payment verified and ticket created!',
+        data: { ticket: buildTicketResponse(savedTicket) },
+      });
+    }
+
+    if (payment.status === 'completed') {
+      const tickets = await ticketModel.getTicketsByUserId(req.user.id);
+      const latestTicket = tickets[0];
+      return res.status(200).json({
+        success: true,
+        message: 'Ticket already created',
+        data: { ticket: latestTicket ? buildTicketResponse(latestTicket) : null },
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: `Payment is ${payment.status}. Please wait for admin verification.`,
+    });
+  } catch (error) {
+    if (error instanceof ticketModel.TicketValidationError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message: `Ticket creation failed: ${error.message}`,
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to complete payment',
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * Check payment status
+ */
+router.get('/payment/manual/:paymentId', verifyToken, async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    const payment = await manualPaymentModel.getPaymentById(paymentId);
+
+    if (!payment) {
+      return res.status(404).json({ success: false, message: 'Payment not found' });
+    }
+
+    if (payment.user_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const isExpired = new Date(payment.expires_at) < new Date();
+
+    return res.json({
+      success: true,
+      data: {
+        payment_id: payment.payment_id,
+        status: isExpired ? 'expired' : payment.status,
+        amount: payment.amount,
+        currency: payment.currency,
+        created_at: payment.created_at,
+        verified_at: payment.verified_at,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * Admin endpoint: Get all pending manual payments
+ */
+router.get('/admin/payments/pending', verifyToken, async (req, res) => {
+  try {
+    const user = await userModel.getUserByEmail(req.user.email);
+    if (user?.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+
+    const payments = await manualPaymentModel.getAllPendingPayments(100);
+    return res.json({
+      success: true,
+      data: payments.map((p) => ({
+        payment_id: p.payment_id,
+        user_email: p.email,
+        user_name: p.name,
+        amount: p.amount,
+        currency: p.currency,
+        method: p.payment_method,
+        status: p.status,
+        created_at: p.created_at,
+        expires_at: p.expires_at,
+      })),
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * Admin endpoint: Mark payment as verified
+ */
+router.post('/admin/payments/:paymentId/verify', verifyToken, async (req, res) => {
+  try {
+    const user = await userModel.getUserByEmail(req.user.email);
+    if (user?.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+
+    const { paymentId } = req.params;
+    const { notes } = req.body;
+
+    const payment = await manualPaymentModel.getPaymentById(paymentId);
+    if (!payment) {
+      return res.status(404).json({ success: false, message: 'Payment not found' });
+    }
+
+    const verified = await manualPaymentModel.verifyPayment(paymentId, user.id, notes || '');
+    if (!verified) {
+      return res.status(400).json({ success: false, message: 'Could not verify payment' });
+    }
+
+    return res.json({
+      success: true,
+      message: `Payment verified. User can now complete booking.`,
+      data: { payment_id: paymentId },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * Admin endpoint: Reject payment
+ */
+router.post('/admin/payments/:paymentId/reject', verifyToken, async (req, res) => {
+  try {
+    const user = await userModel.getUserByEmail(req.user.email);
+    if (user?.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+
+    const { paymentId } = req.params;
+    const { reason } = req.body;
+
+    const payment = await manualPaymentModel.getPaymentById(paymentId);
+    if (!payment) {
+      return res.status(404).json({ success: false, message: 'Payment not found' });
+    }
+
+    const rejected = await manualPaymentModel.rejectPayment(paymentId, user.id, reason || '');
+    if (!rejected) {
+      return res.status(400).json({ success: false, message: 'Could not reject payment' });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Payment rejected',
+      data: { payment_id: paymentId },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Initialize payment models on startup
 nagadPaymentModel.init().catch(console.error);
+manualPaymentModel.init().catch(console.error);
 
 module.exports = router;

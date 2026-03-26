@@ -70,6 +70,14 @@ export const ticketApi = {
     const response = await api.post('/tickets/payment/complete', { payment_ref: paymentRef }, authConfig(token));
     return response?.data?.data ?? response?.data;
   },
+  completeManualPayment: async (paymentId, token) => {
+    const response = await api.post('/tickets/payment/manual/complete', { payment_id: paymentId }, authConfig(token));
+    return response?.data?.data ?? response?.data;
+  },
+  getManualPaymentStatus: async (paymentId, token) => {
+    const response = await api.get(`/tickets/payment/manual/${paymentId}`, authConfig(token));
+    return response?.data?.data ?? response?.data;
+  },
   cancel: async (id, token) => normalize(await api.patch(`/tickets/${id}/cancel`, {}, authConfig(token))),
 };
 

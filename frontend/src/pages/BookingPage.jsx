@@ -257,6 +257,25 @@ export default function BookingPage() {
         token
       );
 
+      // Manual Payment Mode (shows bKash/Nagad account details)
+      if (checkout?.paymentMethods) {
+        setSuccessState({
+          isManualPayment: true,
+          paymentId: checkout.payment_id,
+          amount: checkout.amount,
+          currency: checkout.currency,
+          paymentMethods: checkout.paymentMethods,
+          routeName: stopApi.listByRoute ? 'Route Info' : '',
+          busName: 'Bus',
+          expiresIn: checkout.expiresIn,
+        });
+        setStep(3);
+        toast.info('📱 Send money to complete your booking');
+        setProcessing(false);
+        return;
+      }
+
+      // Nagad Gateway Payment Mode
       if (!checkout?.nagad_payload) {
         throw new Error('Payment gateway did not return checkout details.');
       }
@@ -579,28 +598,74 @@ export default function BookingPage() {
 
           {/* SUCCESS STATE */}
           {step === 3 && successState && (
-            <div className="hero-card rounded-[36px] p-8 sm:p-10 text-center">
-              <div className="text-6xl mb-4">✓</div>
-              <h2 className="text-4xl font-extrabold text-emerald-300">Booking Confirmed!</h2>
-              <p className="mt-4 text-base text-slate-400">
-                Your tickets are booked for <strong>{successState.journeyLabel}</strong> on <strong>{successState.busName}</strong>. Confirmation sent to {successState.email}.
-              </p>
+            <div className="space-y-6">
+              {successState.isManualPayment ? (
+                // Manual Payment Display
+                <div className="hero-card rounded-[36px] p-8 sm:p-10">
+                  <div className="text-6xl mb-4 text-center">💳</div>
+                  <h2 className="text-3xl font-extrabold text-center text-amber-300">Complete Your Payment</h2>
+                  <p className="mt-4 text-center text-slate-300">
+                    Send <strong className="text-white">৳{successState.amount}</strong> to complete your booking
+                  </p>
 
-              <div className="mt-8 grid gap-4 md:grid-cols-2">
-                <SummaryCard label="Route" value={successState.routeName} />
-                <SummaryCard label="Journey" value={successState.journeyLabel} />
-                <SummaryCard label="Departure" value={formatDateTime(successState.departure)} />
-                <SummaryCard label="Seats" value={successState.seatLabels} />
-              </div>
+                  <div className="mt-8 space-y-4">
+                    {successState.paymentMethods.map((method) => (
+                      <div key={method.method} className="rounded-2xl bg-white/5 border border-white/10 p-6">
+                        <h3 className="font-bold text-lg capitalize text-white">{method.method}</h3>
+                        <div className="mt-3 space-y-2 text-sm">
+                          <p><span className="text-slate-400">Account Name:</span> <strong>{method.accountName}</strong></p>
+                          <p><span className="text-slate-400">Account Number:</span> <strong className="font-mono text-base">{method.accountNumber}</strong></p>
+                          <p className="text-xs text-slate-400 mt-2">Reference: <code className="bg-black/30 px-2 py-1 rounded">{successState.paymentId}</code></p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
 
-              <div className="mt-8 flex flex-wrap justify-center gap-3">
-                <button onClick={resetBooking} className="btn-primary">
-                  Book Another Trip
-                </button>
-                <button onClick={() => navigate('/tickets')} className="btn-secondary">
-                  View My Tickets
-                </button>
-              </div>
+                  <div className="mt-8 p-4 bg-amber-900/20 border border-amber-700/30 rounded-xl text-amber-100 text-sm">
+                    <strong>⏱️ Payment expires in {successState.expiresIn}</strong>
+                    <p className="mt-2">After sending money, click "I've Sent the Payment" below.</p>
+                  </div>
+
+                  <button
+                    onClick={() => ticketApi.completeManualPayment(successState.paymentId, token).then(() => {
+                      toast.success('Booking confirmed!');
+                      setTimeout(() => navigate('/tickets'), 2000);
+                    }).catch(() => toast.error('Payment not yet verified by admin'))}
+                    className="btn-primary w-full mt-6"
+                  >
+                    I've Sent the Payment ✓
+                  </button>
+
+                  <button onClick={resetBooking} className="btn-secondary w-full mt-3">
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                // Regular Booking Success
+                <div className="hero-card rounded-[36px] p-8 sm:p-10 text-center">
+                  <div className="text-6xl mb-4">✓</div>
+                  <h2 className="text-4xl font-extrabold text-emerald-300">Booking Confirmed!</h2>
+                  <p className="mt-4 text-base text-slate-400">
+                    Your tickets are booked for <strong>{successState.journeyLabel}</strong> on <strong>{successState.busName}</strong>. Confirmation sent to {successState.email}.
+                  </p>
+
+                  <div className="mt-8 grid gap-4 md:grid-cols-2">
+                    <SummaryCard label="Route" value={successState.routeName} />
+                    <SummaryCard label="Journey" value={successState.journeyLabel} />
+                    <SummaryCard label="Departure" value={formatDateTime(successState.departure)} />
+                    <SummaryCard label="Seats" value={successState.seatLabels} />
+                  </div>
+
+                  <div className="mt-8 flex flex-wrap justify-center gap-3">
+                    <button onClick={resetBooking} className="btn-primary">
+                      Book Another Trip
+                    </button>
+                    <button onClick={() => navigate('/tickets')} className="btn-secondary">
+                      View My Tickets
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

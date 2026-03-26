@@ -75,6 +75,21 @@ services:
       STRIPE_CURRENCY: ${STRIPE_CURRENCY:-bdt}
       PAYMENT_SUCCESS_URL: ${PAYMENT_SUCCESS_URL:-http://localhost/booking?payment=success&session_id={CHECKOUT_SESSION_ID}}
       PAYMENT_CANCEL_URL: ${PAYMENT_CANCEL_URL:-http://localhost/booking?payment=cancelled}
+      # Payment Mode (manual-both, manual-bkash, manual-nagad, nagad)
+      PAYMENT_MODE: ${PAYMENT_MODE:-manual-both}
+      # Manual Payment - bKash Personal Account
+      BKASH_PERSONAL_NUMBER: ${BKASH_PERSONAL_NUMBER:-}
+      BKASH_PERSONAL_NAME: ${BKASH_PERSONAL_NAME:-}
+      # Manual Payment - Nagad Personal Account
+      NAGAD_PERSONAL_NUMBER: ${NAGAD_PERSONAL_NUMBER:-}
+      NAGAD_PERSONAL_NAME: ${NAGAD_PERSONAL_NAME:-}
+      # Nagad Merchant Configuration (for future use)
+      NAGAD_MERCHANT_ID: ${NAGAD_MERCHANT_ID:-}
+      NAGAD_MERCHANT_KEY: ${NAGAD_MERCHANT_KEY:-}
+      NAGAD_MERCHANT_PHONE: ${NAGAD_MERCHANT_PHONE:-}
+      NAGAD_API_URL: ${NAGAD_API_URL:-https://api.nagadpay.com/api/dfs/check-out}
+      NAGAD_CALLBACK_URL: ${NAGAD_CALLBACK_URL:-http://localhost/api/tickets/payment/nagad/callback}
+      PAYMENT_CURRENCY: ${PAYMENT_CURRENCY:-bdt}
     
     # Volumes - map local files to container
     volumes:
