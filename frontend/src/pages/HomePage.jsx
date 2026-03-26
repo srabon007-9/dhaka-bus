@@ -14,7 +14,7 @@ const features = [
   {
     icon: '🎫',
     title: 'Smart Booking',
-    description: 'Intuitive 4-step booking flow. Select seats, check availability, and book instantly.',
+    description: 'Choose where you board, where you exit, then book only the segment you actually travel.',
   },
   {
     icon: '⚡',
@@ -66,7 +66,7 @@ export default function HomePage() {
 
             {/* Subheading */}
             <p className="text-xl text-slate-400 max-w-2xl leading-relaxed mb-12">
-              Real-time bus tracking meets intelligent booking. See where buses are right now, book your seat instantly, and experience transportation reimagined.
+              Real-time bus tracking meets practical trip booking. Pick your boarding stop, destination stop, and seat in a flow designed for everyday commuters.
             </p>
 
             {/* Search Bar */}

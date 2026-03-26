@@ -2,12 +2,41 @@
 
 const pool = require('../config/database');
 
+const attachCoordinates = async (route) => {
+  if (!route) return null;
+
+  const [waypoints] = await pool.query(
+    `SELECT latitude, longitude
+     FROM route_waypoints
+     WHERE route_id = ?
+     ORDER BY stop_from_order ASC, stop_to_order ASC, waypoint_sequence ASC`,
+    [route.id]
+  );
+
+  const [stops] = await pool.query(
+    `SELECT stop_name, latitude, longitude, stop_order
+     FROM bus_stops
+     WHERE route_id = ?
+     ORDER BY stop_order ASC`,
+    [route.id]
+  );
+
+  return {
+    ...route,
+    coordinates: (waypoints.length ? waypoints : stops).map((point) => [
+      Number(point.latitude),
+      Number(point.longitude),
+    ]),
+    stops,
+  };
+};
+
 // Get all routes
 // Routes define the path a bus takes (e.g., Gulshan -> Dhanmondi -> Motijheel)
 const getAllRoutes = async () => {
   try {
-    const [rows] = await pool.query('SELECT * FROM routes');
-    return rows;
+    const [rows] = await pool.query('SELECT * FROM routes ORDER BY route_name ASC');
+    return Promise.all(rows.map(attachCoordinates));
   } catch (error) {
     console.error('Error fetching routes:', error);
     throw error;
@@ -17,14 +46,8 @@ const getAllRoutes = async () => {
 // Get a single route by ID
 const getRouteById = async (routeId) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM routes WHERE id = ?', [
-      routeId,
-    ]);
-    // Parse coordinates safely (string or already parsed JSON)
-    if (rows[0] && typeof rows[0].coordinates === 'string') {
-      rows[0].coordinates = JSON.parse(rows[0].coordinates);
-    }
-    return rows[0];
+    const [rows] = await pool.query('SELECT * FROM routes WHERE id = ?', [routeId]);
+    return attachCoordinates(rows[0] || null);
   } catch (error) {
     console.error('Error fetching route:', error);
     throw error;
@@ -38,10 +61,7 @@ const getRouteByName = async (routeName) => {
       'SELECT * FROM routes WHERE route_name = ?',
       [routeName]
     );
-    if (rows[0] && typeof rows[0].coordinates === 'string') {
-      rows[0].coordinates = JSON.parse(rows[0].coordinates);
-    }
-    return rows[0];
+    return attachCoordinates(rows[0] || null);
   } catch (error) {
     console.error('Error fetching route by name:', error);
     throw error;
@@ -51,10 +71,10 @@ const getRouteByName = async (routeName) => {
 // Add a new route
 const addRoute = async (routeData) => {
   try {
-    const { route_name, coordinates } = routeData;
+    const { route_name, start_point, end_point } = routeData;
     const [result] = await pool.query(
-      'INSERT INTO routes (route_name, coordinates) VALUES (?, ?)',
-      [route_name, JSON.stringify(coordinates)]
+      'INSERT INTO routes (route_name, start_point, end_point) VALUES (?, ?, ?)',
+      [route_name, start_point, end_point]
     );
     return result;
   } catch (error) {
@@ -65,10 +85,10 @@ const addRoute = async (routeData) => {
 
 const updateRoute = async (routeId, routeData) => {
   try {
-    const { route_name, coordinates } = routeData;
+    const { route_name, start_point, end_point } = routeData;
     const [result] = await pool.query(
-      'UPDATE routes SET route_name = ?, coordinates = ? WHERE id = ?',
-      [route_name, JSON.stringify(coordinates), routeId]
+      'UPDATE routes SET route_name = ?, start_point = ?, end_point = ? WHERE id = ?',
+      [route_name, start_point, end_point, routeId]
     );
     return result;
   } catch (error) {

@@ -28,15 +28,16 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- ==========================================
 -- Password for admin@dhakabus.com: admin123
 -- Password for user@dhakabus.com: user123
-INSERT INTO users (name, email, password_hash, role) VALUES
-('System Admin', 'admin@dhakabus.com', '$2b$10$EWn/WPJkxGRndQuN6J9KA.pqyzICNCkqGeNEHuxpw03Fu4MmPh8S6', 'admin'),
-('Demo User', 'user@dhakabus.com', '$2b$10$pJMO5xgbU/3a5bL2wpAtUeM8rQ/wJq3yQVqHJwYObh7q7Y5nN4wH2', 'user');
+INSERT INTO users (name, email, password_hash, role, email_verified_at, verification_token_hash, verification_expires_at) VALUES
+('System Admin', 'admin@dhakabus.com', '$2b$10$EWn/WPJkxGRndQuN6J9KA.pqyzICNCkqGeNEHuxpw03Fu4MmPh8S6', 'admin', NOW(), NULL, NULL),
+('Demo User', 'user@dhakabus.com', '$2b$10$pJMO5xgbU/3a5bL2wpAtUeM8rQ/wJq3yQVqHJwYObh7q7Y5nN4wH2', 'user', NOW(), NULL, NULL);
 
 -- ==========================================
 -- ROUTES - Single Route: Dhanmondi-Airport Express
 -- ==========================================
 INSERT INTO routes (route_name, start_point, end_point) VALUES
-('Dhanmondi–Airport Express', 'Dhanmondi 27', 'Hazrat Shahjalal International Airport');
+('Dhanmondi–Airport Express', 'Dhanmondi 27', 'Hazrat Shahjalal International Airport'),
+('Airport to Dhanmondi 27', 'Airport', 'Dhanmondi 27');
 
 -- ==========================================
 -- BUS_STOPS - 15 Ordered Stops with Real Dhaka Coordinates
@@ -89,6 +90,26 @@ INSERT INTO bus_stops (route_id, stop_name, latitude, longitude, stop_order) VAL
 (1, 'Airport', 23.8433, 90.4066, 15);
 
 -- ==========================================
+-- BUS_STOPS - Reverse Route: Airport to Dhanmondi 27
+-- ==========================================
+INSERT INTO bus_stops (route_id, stop_name, latitude, longitude, stop_order) VALUES
+(2, 'Airport', 23.8433, 90.4066, 1),
+(2, 'Khilkhet', 23.8378, 90.4500, 2),
+(2, 'Kuril Bishwa Road', 23.8312, 90.4445, 3),
+(2, 'Notun Bazar', 23.8245, 90.4390, 4),
+(2, 'Badda', 23.8167, 90.4340, 5),
+(2, 'Rampura', 23.8089, 90.4278, 6),
+(2, 'Malibag', 23.8001, 90.4210, 7),
+(2, 'Kakrail', 23.7890, 90.4145, 8),
+(2, 'Matsya Bhaban', 23.7810, 90.4078, 9),
+(2, 'Shahbag', 23.7745, 90.4023, 10),
+(2, 'Nilkhet', 23.7680, 90.3965, 11),
+(2, 'New Market', 23.7620, 90.3912, 12),
+(2, 'Science Lab', 23.7550, 90.3850, 13),
+(2, 'Dhanmondi 32', 23.7445, 90.3780, 14),
+(2, 'Dhanmondi 27', 23.7419, 90.3734, 15);
+
+-- ==========================================
 -- BUSES - 10 Active Buses on the Same Route
 -- ==========================================
 INSERT INTO buses (name, route_id, capacity, status) VALUES
@@ -101,7 +122,12 @@ INSERT INTO buses (name, route_id, capacity, status) VALUES
 ('Airport Express 7', 1, 40, 'active'),
 ('Airport Express 8', 1, 40, 'active'),
 ('Airport Express 9', 1, 40, 'active'),
-('Airport Express 10', 1, 40, 'active');
+('Airport Express 10', 1, 40, 'active'),
+('Airport Return 1', 2, 40, 'active'),
+('Airport Return 2', 2, 40, 'active'),
+('Airport Return 3', 2, 40, 'active'),
+('Airport Return 4', 2, 40, 'active'),
+('Airport Return 5', 2, 40, 'active');
 
 -- ==========================================
 -- ROUTE WAYPOINTS - Realistic road-based path
@@ -208,6 +234,67 @@ INSERT INTO route_waypoints (route_id, stop_from_order, stop_to_order, waypoint_
 (1, 14, 15, 4, 23.8433, 90.4066);  -- Arrive at Airport
 
 -- ==========================================
+-- ROUTE WAYPOINTS - Reverse route back to Dhanmondi 27
+-- ==========================================
+INSERT INTO route_waypoints (route_id, stop_from_order, stop_to_order, waypoint_sequence, latitude, longitude) VALUES
+(2, 1, 2, 1, 23.8433, 90.4066),
+(2, 1, 2, 2, 23.8423, 90.4150),
+(2, 1, 2, 3, 23.8412, 90.4350),
+(2, 1, 2, 4, 23.8378, 90.4500),
+(2, 2, 3, 1, 23.8378, 90.4500),
+(2, 2, 3, 2, 23.8356, 90.4483),
+(2, 2, 3, 3, 23.8335, 90.4465),
+(2, 2, 3, 4, 23.8312, 90.4445),
+(2, 3, 4, 1, 23.8312, 90.4445),
+(2, 3, 4, 2, 23.8290, 90.4428),
+(2, 3, 4, 3, 23.8268, 90.4410),
+(2, 3, 4, 4, 23.8245, 90.4390),
+(2, 4, 5, 1, 23.8245, 90.4390),
+(2, 4, 5, 2, 23.8223, 90.4375),
+(2, 4, 5, 3, 23.8200, 90.4360),
+(2, 4, 5, 4, 23.8167, 90.4340),
+(2, 5, 6, 1, 23.8167, 90.4340),
+(2, 5, 6, 2, 23.8143, 90.4325),
+(2, 5, 6, 3, 23.8120, 90.4305),
+(2, 5, 6, 4, 23.8089, 90.4278),
+(2, 6, 7, 1, 23.8089, 90.4278),
+(2, 6, 7, 2, 23.8062, 90.4258),
+(2, 6, 7, 3, 23.8034, 90.4238),
+(2, 6, 7, 4, 23.8001, 90.4210),
+(2, 7, 8, 1, 23.8001, 90.4210),
+(2, 7, 8, 2, 23.7968, 90.4185),
+(2, 7, 8, 3, 23.7935, 90.4165),
+(2, 7, 8, 4, 23.7890, 90.4145),
+(2, 8, 9, 1, 23.7890, 90.4145),
+(2, 8, 9, 2, 23.7868, 90.4125),
+(2, 8, 9, 3, 23.7845, 90.4105),
+(2, 8, 9, 4, 23.7810, 90.4078),
+(2, 9, 10, 1, 23.7810, 90.4078),
+(2, 9, 10, 2, 23.7788, 90.4062),
+(2, 9, 10, 3, 23.7765, 90.4045),
+(2, 9, 10, 4, 23.7745, 90.4023),
+(2, 10, 11, 1, 23.7745, 90.4023),
+(2, 10, 11, 2, 23.7722, 90.4005),
+(2, 10, 11, 3, 23.7700, 90.3985),
+(2, 10, 11, 4, 23.7680, 90.3965),
+(2, 11, 12, 1, 23.7680, 90.3965),
+(2, 11, 12, 2, 23.7660, 90.3950),
+(2, 11, 12, 3, 23.7640, 90.3930),
+(2, 11, 12, 4, 23.7620, 90.3912),
+(2, 12, 13, 1, 23.7620, 90.3912),
+(2, 12, 13, 2, 23.7600, 90.3895),
+(2, 12, 13, 3, 23.7575, 90.3875),
+(2, 12, 13, 4, 23.7550, 90.3850),
+(2, 13, 14, 1, 23.7550, 90.3850),
+(2, 13, 14, 2, 23.7515, 90.3835),
+(2, 13, 14, 3, 23.7480, 90.3810),
+(2, 13, 14, 4, 23.7445, 90.3780),
+(2, 14, 15, 1, 23.7445, 90.3780),
+(2, 14, 15, 2, 23.7432, 90.3760),
+(2, 14, 15, 3, 23.7425, 90.3745),
+(2, 14, 15, 4, 23.7419, 90.3734);
+
+-- ==========================================
 -- INITIAL LOCATIONS - Buses distributed across different stops for maximum coverage
 -- Each bus starts at a different point along the route
 -- ==========================================
@@ -231,7 +318,13 @@ INSERT INTO locations (bus_id, latitude, longitude, speed_kmh, timestamp) VALUES
 -- Bus 9: Malibag (Stop 9)
 (9, 23.8001, 90.4210, 0, NOW()),
 -- Bus 10: Rampura (Stop 10)
-(10, 23.8089, 90.4278, 0, NOW());
+(10, 23.8089, 90.4278, 0, NOW()),
+-- Reverse route buses
+(11, 23.8433, 90.4066, 0, NOW()),
+(12, 23.8378, 90.4500, 0, NOW()),
+(13, 23.8312, 90.4445, 0, NOW()),
+(14, 23.8245, 90.4390, 0, NOW()),
+(15, 23.8167, 90.4340, 0, NOW());
 
 -- ==========================================
 -- TRIPS - Sample trips for booking
@@ -244,12 +337,18 @@ INSERT INTO trips (route_id, bus_id, departure_time, arrival_time, fare, total_s
 (1, 1, CONCAT(DATE(NOW()), ' 12:00:00'), CONCAT(DATE(NOW()), ' 13:30:00'), 150.00, 40, 'scheduled'),
 (1, 1, CONCAT(DATE(NOW()), ' 14:00:00'), CONCAT(DATE(NOW()), ' 15:30:00'), 150.00, 40, 'scheduled'),
 (1, 1, CONCAT(DATE(NOW()), ' 16:00:00'), CONCAT(DATE(NOW()), ' 17:30:00'), 150.00, 40, 'scheduled'),
-(1, 1, CONCAT(DATE(NOW()), ' 18:00:00'), CONCAT(DATE(NOW()), ' 19:30:00'), 150.00, 40, 'scheduled');
+(1, 1, CONCAT(DATE(NOW()), ' 18:00:00'), CONCAT(DATE(NOW()), ' 19:30:00'), 150.00, 40, 'scheduled'),
+(2, 11, CONCAT(DATE(NOW()), ' 07:00:00'), CONCAT(DATE(NOW()), ' 08:30:00'), 150.00, 40, 'scheduled'),
+(2, 11, CONCAT(DATE(NOW()), ' 09:00:00'), CONCAT(DATE(NOW()), ' 10:30:00'), 150.00, 40, 'scheduled'),
+(2, 11, CONCAT(DATE(NOW()), ' 11:00:00'), CONCAT(DATE(NOW()), ' 12:30:00'), 150.00, 40, 'scheduled'),
+(2, 11, CONCAT(DATE(NOW()), ' 13:00:00'), CONCAT(DATE(NOW()), ' 14:30:00'), 150.00, 40, 'scheduled'),
+(2, 11, CONCAT(DATE(NOW()), ' 15:00:00'), CONCAT(DATE(NOW()), ' 16:30:00'), 150.00, 40, 'scheduled'),
+(2, 11, CONCAT(DATE(NOW()), ' 17:00:00'), CONCAT(DATE(NOW()), ' 18:30:00'), 150.00, 40, 'scheduled');
 
 -- ==========================================
 -- SAMPLE TICKETS (optional - for testing)
 -- ==========================================
 -- User books seats on first trip
-INSERT INTO tickets (user_id, trip_id, seat_numbers, passenger_name, total_price, status) VALUES
-(2, 1, '[1, 2, 3]', 'Ahmed Hassan', 450.00, 'active'),
-(2, 1, '[15, 16]', 'Fatima Khan', 300.00, 'active');
+INSERT INTO tickets (user_id, trip_id, boarding_stop_id, dropoff_stop_id, seat_numbers, passenger_name, total_price, status) VALUES
+(2, 1, 1, 7, '[1, 2, 3]', 'Ahmed Hassan', 128.57, 'active'),
+(2, 1, 9, 15, '[1, 15]', 'Fatima Khan', 128.57, 'active');

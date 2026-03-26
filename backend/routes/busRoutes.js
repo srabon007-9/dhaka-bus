@@ -86,9 +86,17 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/buses - Add a new bus
-// Body should contain: { name, route_name, start_point, end_point }
+// Body should contain: { name, route_id, capacity, status }
 router.post('/', verifyToken, requireAdmin, async (req, res) => {
   try {
+    const { name, route_id } = req.body;
+    if (!name || !route_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'name and route_id are required',
+      });
+    }
+
     const result = await busModel.addBus(req.body);
     res.status(201).json({
       success: true,
@@ -114,9 +122,9 @@ router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
 
     const payload = {
       name: req.body.name ?? existing.name,
-      route_name: req.body.route_name ?? existing.route_name,
-      start_point: req.body.start_point ?? existing.start_point,
-      end_point: req.body.end_point ?? existing.end_point,
+      route_id: req.body.route_id ?? existing.route_id,
+      capacity: req.body.capacity ?? existing.capacity,
+      status: req.body.status ?? existing.status,
     };
 
     const result = await busModel.updateBus(req.params.id, payload);

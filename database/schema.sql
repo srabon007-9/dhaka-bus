@@ -100,6 +100,9 @@ CREATE TABLE IF NOT EXISTS users (
   email VARCHAR(255) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   role ENUM('admin', 'user') DEFAULT 'user',
+  email_verified_at DATETIME NULL,
+  verification_token_hash VARCHAR(128) NULL,
+  verification_expires_at DATETIME NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -125,15 +128,20 @@ CREATE TABLE IF NOT EXISTS tickets (
   id INT PRIMARY KEY AUTO_INCREMENT,
   user_id INT NOT NULL,
   trip_id INT NOT NULL,
+  boarding_stop_id INT NOT NULL,
+  dropoff_stop_id INT NOT NULL,
   seat_numbers JSON NOT NULL,
   passenger_name VARCHAR(120) NOT NULL,
   total_price DECIMAL(10, 2) NOT NULL,
   status ENUM('active', 'cancelled') DEFAULT 'active',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE
+  FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE,
+  FOREIGN KEY (boarding_stop_id) REFERENCES bus_stops(id) ON DELETE RESTRICT,
+  FOREIGN KEY (dropoff_stop_id) REFERENCES bus_stops(id) ON DELETE RESTRICT
 );
 
 CREATE INDEX idx_trip_route ON trips(route_id, departure_time);
 CREATE INDEX idx_trip_bus ON trips(bus_id);
 CREATE INDEX idx_ticket_user ON tickets(user_id, created_at DESC);
+CREATE INDEX idx_ticket_trip_segment ON tickets(trip_id, boarding_stop_id, dropoff_stop_id, status);

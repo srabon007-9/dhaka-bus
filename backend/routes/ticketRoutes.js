@@ -1,6 +1,6 @@
 const express = require('express');
 const ticketModel = require('../models/ticketModel');
-const tripModel = require('../models/tripModel');
+const userModel = require('../models/userModel');
 const { verifyToken } = require('../middleware/auth');
 
 const router = express.Router();
@@ -19,7 +19,11 @@ router.get('/', verifyToken, async (req, res) => {
 
 router.get('/trip/:tripId/booked-seats', async (req, res) => {
   try {
-    const seats = await ticketModel.getBookedSeatsByTripId(req.params.tripId);
+    const seats = await ticketModel.getBookedSeatsByTripId(
+      req.params.tripId,
+      req.query.boarding_stop_id,
+      req.query.dropoff_stop_id
+    );
     return res.json({ success: true, data: seats });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Error fetching booked seats', error: error.message });
@@ -28,42 +32,49 @@ router.get('/trip/:tripId/booked-seats', async (req, res) => {
 
 router.post('/', verifyToken, async (req, res) => {
   try {
-    const { trip_id, seat_numbers, passenger_name } = req.body;
+    const { trip_id, boarding_stop_id, dropoff_stop_id, seat_numbers, passenger_name } = req.body;
 
-    if (!trip_id || !Array.isArray(seat_numbers) || !seat_numbers.length || !passenger_name) {
+    if (!trip_id || !boarding_stop_id || !dropoff_stop_id || !Array.isArray(seat_numbers) || !seat_numbers.length || !passenger_name) {
       return res.status(400).json({
         success: false,
-        message: 'trip_id, seat_numbers (array), and passenger_name are required',
+        message: 'trip_id, boarding_stop_id, dropoff_stop_id, seat_numbers (array), and passenger_name are required',
       });
     }
 
-    const trip = await tripModel.getTripById(trip_id);
-    if (!trip) {
-      return res.status(404).json({ success: false, message: 'Trip not found' });
+    if (seat_numbers.length > 4) {
+      return res.status(400).json({
+        success: false,
+        message: 'You can book at most 4 tickets at a time',
+      });
     }
 
-    const booked = await ticketModel.getBookedSeatsByTripId(trip_id);
-    const conflict = seat_numbers.find((seat) => booked.includes(seat));
-    if (conflict) {
-      return res.status(409).json({ success: false, message: `Seat ${conflict} is already booked` });
+    const user = await userModel.getUserByEmail(req.user.email);
+    if (!user?.email_verified_at) {
+      return res.status(403).json({
+        success: false,
+        message: 'Verify your email before buying tickets',
+        verificationRequired: true,
+      });
     }
 
-    const total_price = Number(trip.fare) * seat_numbers.length;
-
-    const result = await ticketModel.createTicket({
+    const result = await ticketModel.reserveTicket({
       user_id: req.user.id,
       trip_id,
+      boarding_stop_id,
+      dropoff_stop_id,
       seat_numbers,
       passenger_name,
-      total_price,
     });
 
     return res.status(201).json({
       success: true,
-      data: { id: result.insertId, total_price },
+      data: result,
       message: 'Ticket booked successfully',
     });
   } catch (error) {
+    if (error instanceof ticketModel.TicketValidationError) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
     return res.status(500).json({ success: false, message: 'Error booking ticket', error: error.message });
   }
 });

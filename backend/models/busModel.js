@@ -6,7 +6,12 @@ const pool = require('../config/database');
 // This queries the 'buses' table and returns all buses
 const getAllBuses = async () => {
   try {
-    const [rows] = await pool.query('SELECT * FROM buses');
+    const [rows] = await pool.query(
+      `SELECT b.*, r.route_name, r.start_point, r.end_point
+       FROM buses b
+       JOIN routes r ON r.id = b.route_id
+       ORDER BY b.id ASC`
+    );
     return rows;
   } catch (error) {
     console.error('Error fetching buses:', error);
@@ -17,7 +22,13 @@ const getAllBuses = async () => {
 // Get a single bus by ID
 const getBusById = async (busId) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM buses WHERE id = ?', [busId]);
+    const [rows] = await pool.query(
+      `SELECT b.*, r.route_name, r.start_point, r.end_point
+       FROM buses b
+       JOIN routes r ON r.id = b.route_id
+       WHERE b.id = ?`,
+      [busId]
+    );
     return rows[0];
   } catch (error) {
     console.error('Error fetching bus:', error);
@@ -30,12 +41,33 @@ const getBusById = async (busId) => {
 const getBusesByRouteId = async (routeId) => {
   try {
     const [rows] = await pool.query(
-      'SELECT * FROM buses WHERE route_id = ?',
+      `SELECT b.*, r.route_name, r.start_point, r.end_point
+       FROM buses b
+       JOIN routes r ON r.id = b.route_id
+       WHERE b.route_id = ?
+       ORDER BY b.id ASC`,
       [routeId]
     );
     return rows;
   } catch (error) {
     console.error('Error fetching buses by route:', error);
+    throw error;
+  }
+};
+
+const getBusesByRoute = async (routeName) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT b.*, r.route_name, r.start_point, r.end_point
+       FROM buses b
+       JOIN routes r ON r.id = b.route_id
+       WHERE r.route_name = ?
+       ORDER BY b.id ASC`,
+      [routeName]
+    );
+    return rows;
+  } catch (error) {
+    console.error('Error fetching buses by route name:', error);
     throw error;
   }
 };
@@ -85,6 +117,7 @@ module.exports = {
   getAllBuses,
   getBusById,
   getBusesByRouteId,
+  getBusesByRoute,
   addBus,
   updateBus,
   deleteBus,

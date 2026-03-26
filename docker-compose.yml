@@ -61,7 +61,7 @@ services:
       DB_USER: root
       DB_PASSWORD: password
       DB_NAME: dhaka_bus
-      FRONTEND_URL: http://localhost:5173
+      FRONTEND_URL: http://localhost
     
     # Volumes - map local files to container
     volumes:

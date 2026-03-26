@@ -105,7 +105,10 @@ export default function TicketsPage() {
                   routeName: ticket.route_name,
                   tripTime: new Date(ticket.departure_time).toLocaleString(),
                   seats: parseSeatNumbers(ticket.seat_numbers),
+                  boardingStop: ticket.boarding_stop_name,
+                  dropoffStop: ticket.dropoff_stop_name,
                   passengerName: ticket.passenger_name,
+                  totalPrice: Number(ticket.total_price).toFixed(2),
                   status: ticket.status,
                 }}
               />

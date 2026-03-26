@@ -33,6 +33,10 @@ export const locationApi = {
   list: async () => normalize(await api.get('/locations')),
 };
 
+export const stopApi = {
+  listByRoute: async (routeId) => normalize(await api.get(`/stops/${routeId}`)),
+};
+
 export const tripApi = {
   list: async (routeId) => normalize(await api.get('/trips', routeId ? { params: { routeId } } : undefined)),
   create: async (payload, token) => normalize(await api.post('/trips', payload, authConfig(token))),
@@ -42,13 +46,23 @@ export const tripApi = {
 
 export const ticketApi = {
   list: async (token) => normalize(await api.get('/tickets', authConfig(token))),
-  getBookedSeats: async (tripId) => normalize(await api.get(`/tickets/trip/${tripId}/booked-seats`)),
+  getBookedSeats: async (tripId, boardingStopId, dropoffStopId) => normalize(
+    await api.get(`/tickets/trip/${tripId}/booked-seats`, {
+      params: {
+        boarding_stop_id: boardingStopId,
+        dropoff_stop_id: dropoffStopId,
+      },
+    })
+  ),
   create: async (payload, token) => normalize(await api.post('/tickets', payload, authConfig(token))),
   cancel: async (id, token) => normalize(await api.patch(`/tickets/${id}/cancel`, {}, authConfig(token))),
 };
 
 export const authApi = {
-  register: async (payload) => normalize(await api.post('/auth/register', payload)),
+  register: async (payload) => {
+    const response = await api.post('/auth/register', payload);
+    return response?.data;
+  },
   login: async (payload) => {
     try {
       const response = await api.post('/auth/login', payload);
@@ -63,6 +77,14 @@ export const authApi = {
     }
   },
   me: async (token) => normalize(await api.get('/auth/me', authConfig(token))),
+  verifyEmail: async (token) => {
+    const response = await api.get('/auth/verify', { params: { token } });
+    return response?.data;
+  },
+  resendVerification: async (payload) => {
+    const response = await api.post('/auth/resend-verification', payload);
+    return response?.data;
+  },
 };
 
 export const healthApi = {

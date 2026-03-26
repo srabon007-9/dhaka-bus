@@ -11,15 +11,7 @@ const router = express.Router();
 // Returns all bus routes with their coordinates for drawing on map
 router.get('/', async (req, res) => {
   try {
-    const routes = await routeModel.getAllRoutes();
-    // Parse coordinates safely (can come as JSON string or native object)
-    const parsedRoutes = routes.map((route) => ({
-      ...route,
-      coordinates:
-        typeof route.coordinates === 'string'
-          ? JSON.parse(route.coordinates)
-          : route.coordinates,
-    }));
+    const parsedRoutes = await routeModel.getAllRoutes();
     res.json({
       success: true,
       data: parsedRoutes,
@@ -85,9 +77,17 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/routes - Add a new route (admin only)
-// Body should contain: { route_name, coordinates: [[lat, lng], [lat, lng], ...] }
+// Body should contain: { route_name, start_point, end_point }
 router.post('/', verifyToken, requireAdmin, async (req, res) => {
   try {
+    const { route_name, start_point, end_point } = req.body;
+    if (!route_name || !start_point || !end_point) {
+      return res.status(400).json({
+        success: false,
+        message: 'route_name, start_point, and end_point are required',
+      });
+    }
+
     const result = await routeModel.addRoute(req.body);
     res.status(201).json({
       success: true,
@@ -113,7 +113,8 @@ router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
 
     const payload = {
       route_name: req.body.route_name ?? existing.route_name,
-      coordinates: req.body.coordinates ?? existing.coordinates,
+      start_point: req.body.start_point ?? existing.start_point,
+      end_point: req.body.end_point ?? existing.end_point,
     };
 
     const result = await routeModel.updateRoute(req.params.id, payload);

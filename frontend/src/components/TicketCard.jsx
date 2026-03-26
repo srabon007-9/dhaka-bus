@@ -16,11 +16,23 @@ export default function TicketCard({ ticket }) {
         </div>
         <div>
           <p className="text-xs text-slate-400">Seats</p>
-          <p>{ticket.seats.join(', ')}</p>
+          <p>{ticket.seats.map((seat) => `S${seat}`).join(', ')}</p>
+        </div>
+        <div>
+          <p className="text-xs text-slate-400">From</p>
+          <p>{ticket.boardingStop}</p>
+        </div>
+        <div>
+          <p className="text-xs text-slate-400">To</p>
+          <p>{ticket.dropoffStop}</p>
         </div>
         <div>
           <p className="text-xs text-slate-400">Passenger</p>
           <p>{ticket.passengerName}</p>
+        </div>
+        <div>
+          <p className="text-xs text-slate-400">Fare</p>
+          <p>৳ {ticket.totalPrice}</p>
         </div>
         <div>
           <p className="text-xs text-slate-400">Booking ID</p>

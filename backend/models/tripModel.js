@@ -2,9 +2,10 @@ const pool = require('../config/database');
 
 const getAllTrips = async () => {
   const [rows] = await pool.query(
-    `SELECT t.*, r.route_name
+    `SELECT t.*, r.route_name, b.name AS bus_name, b.status AS bus_status, b.capacity AS bus_capacity
      FROM trips t
      JOIN routes r ON r.id = t.route_id
+     JOIN buses b ON b.id = t.bus_id
      ORDER BY t.departure_time ASC`
   );
   return rows;
@@ -12,9 +13,10 @@ const getAllTrips = async () => {
 
 const getTripsByRouteId = async (routeId) => {
   const [rows] = await pool.query(
-    `SELECT t.*, r.route_name
+    `SELECT t.*, r.route_name, b.name AS bus_name, b.status AS bus_status, b.capacity AS bus_capacity
      FROM trips t
      JOIN routes r ON r.id = t.route_id
+     JOIN buses b ON b.id = t.bus_id
      WHERE t.route_id = ?
      ORDER BY t.departure_time ASC`,
     [routeId]

@@ -22,6 +22,8 @@ export default function AdminPage() {
     start_point: '',
     end_point: '',
     route_id: '',
+    capacity: '40',
+    status: 'active',
     bus_id: '',
     departure_time: '',
     arrival_time: '',
@@ -56,6 +58,8 @@ export default function AdminPage() {
       start_point: '',
       end_point: '',
       route_id: '',
+      capacity: '40',
+      status: 'active',
       bus_id: '',
       departure_time: '',
       arrival_time: '',
@@ -73,12 +77,17 @@ export default function AdminPage() {
       setForm((prev) => ({
         ...prev,
         name: row.name || '',
+        route_id: row.route_id ? String(row.route_id) : '',
+        capacity: row.capacity ? String(row.capacity) : '40',
+        status: row.status || 'active',
+      }));
+    } else if (type === 'route') {
+      setForm((prev) => ({
+        ...prev,
         route_name: row.route_name || '',
         start_point: row.start_point || '',
         end_point: row.end_point || '',
       }));
-    } else if (type === 'route') {
-      setForm((prev) => ({ ...prev, route_name: row.route_name || '' }));
     } else {
       setForm((prev) => ({
         ...prev,
@@ -97,27 +106,38 @@ export default function AdminPage() {
   const submitForm = async () => {
     try {
       if (formType === 'bus') {
+        const payload = {
+          name: form.name,
+          route_id: Number(form.route_id),
+          capacity: Number(form.capacity || 40),
+          status: form.status || 'active',
+        };
+
         if (editingId) {
-          await busApi.update(editingId, form, token);
+          await busApi.update(editingId, payload, token);
           toast.success('Bus updated.');
         } else {
-          await busApi.create(form, token);
+          await busApi.create(payload, token);
           toast.success('Bus added.');
         }
       } else if (formType === 'route') {
         if (editingId) {
-          const target = routes.find((item) => item.id === editingId);
           await routeApi.update(
             editingId,
             {
               route_name: form.route_name,
-              coordinates: target?.coordinates || [[23.81, 90.41], [23.77, 90.39]],
+              start_point: form.start_point,
+              end_point: form.end_point,
             },
             token
           );
           toast.success('Route updated.');
         } else {
-          await routeApi.create({ route_name: form.route_name, coordinates: [[23.81, 90.41], [23.77, 90.39]] }, token);
+          await routeApi.create({
+            route_name: form.route_name,
+            start_point: form.start_point,
+            end_point: form.end_point,
+          }, token);
           toast.success('Route added.');
         }
       } else {
@@ -179,8 +199,8 @@ export default function AdminPage() {
             columns={[
               { key: 'name', label: 'Bus Name' },
               { key: 'route_name', label: 'Route' },
-              { key: 'start_point', label: 'Start' },
-              { key: 'end_point', label: 'Destination' },
+              { key: 'capacity', label: 'Seats' },
+              { key: 'status', label: 'Status' },
             ]}
             rows={buses}
             onDelete={(row) => removeRecord(row, 'bus')}
@@ -202,7 +222,8 @@ export default function AdminPage() {
           <DataTable
             columns={[
               { key: 'route_name', label: 'Route Name' },
-              { key: 'id', label: 'Route ID' },
+              { key: 'start_point', label: 'Start' },
+              { key: 'end_point', label: 'Destination' },
             ]}
             rows={routes}
             onDelete={(row) => removeRecord(row, 'route')}
@@ -258,12 +279,25 @@ export default function AdminPage() {
           {formType === 'bus' ? (
             <>
               <input placeholder="Bus name" value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} className="w-full rounded-xl border border-white/15 bg-slate-950 px-3 py-2 text-white" />
+              <select value={form.route_id} onChange={(event) => setForm((prev) => ({ ...prev, route_id: event.target.value }))} className="w-full rounded-xl border border-white/15 bg-slate-950 px-3 py-2 text-white">
+                <option value="">Select route</option>
+                {routes.map((route) => (
+                  <option key={route.id} value={route.id}>{route.route_name}</option>
+                ))}
+              </select>
+              <input type="number" min="1" placeholder="Seat capacity" value={form.capacity} onChange={(event) => setForm((prev) => ({ ...prev, capacity: event.target.value }))} className="w-full rounded-xl border border-white/15 bg-slate-950 px-3 py-2 text-white" />
+              <select value={form.status} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value }))} className="w-full rounded-xl border border-white/15 bg-slate-950 px-3 py-2 text-white">
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="maintenance">Maintenance</option>
+              </select>
+            </>
+          ) : formType === 'route' ? (
+            <>
               <input placeholder="Route name" value={form.route_name} onChange={(event) => setForm((prev) => ({ ...prev, route_name: event.target.value }))} className="w-full rounded-xl border border-white/15 bg-slate-950 px-3 py-2 text-white" />
               <input placeholder="Start point" value={form.start_point} onChange={(event) => setForm((prev) => ({ ...prev, start_point: event.target.value }))} className="w-full rounded-xl border border-white/15 bg-slate-950 px-3 py-2 text-white" />
               <input placeholder="Destination" value={form.end_point} onChange={(event) => setForm((prev) => ({ ...prev, end_point: event.target.value }))} className="w-full rounded-xl border border-white/15 bg-slate-950 px-3 py-2 text-white" />
             </>
-          ) : formType === 'route' ? (
-            <input placeholder="Route name" value={form.route_name} onChange={(event) => setForm((prev) => ({ ...prev, route_name: event.target.value }))} className="w-full rounded-xl border border-white/15 bg-slate-950 px-3 py-2 text-white" />
           ) : (
             <>
               <select value={form.route_id} onChange={(event) => setForm((prev) => ({ ...prev, route_id: event.target.value }))} className="w-full rounded-xl border border-white/15 bg-slate-950 px-3 py-2 text-white">
