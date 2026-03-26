@@ -54,7 +54,12 @@ function FitStopsBounds({ positions }) {
     if (!positions || positions.length < 2) return;
 
     const bounds = L.latLngBounds(positions);
-    map.fitBounds(bounds, { padding: [50, 50] });
+    map.fitBounds(bounds, { 
+      padding: [50, 50],
+      animate: true,
+      duration: 0.8,
+      easeLinearity: 0.25
+    });
   }, [map, positions]);
 
   return null;
@@ -67,7 +72,7 @@ function CenterOnBus({ busPosition, selectedBus }) {
     if (!busPosition || !selectedBus) return;
 
     const [lat, lng] = busPosition;
-    map.panTo([lat, lng], { animate: true, duration: 0.5 });
+    map.panTo([lat, lng], { animate: true, duration: 0.8, easeLinearity: 0.25 });
   }, [map, busPosition, selectedBus]);
 
   return null;
@@ -310,7 +315,14 @@ export default function MapView({ routes = [], buses = [], busLocations = new Ma
         return;
       }
 
-      const radius = zoomLevel < 12 ? 0.00008 : 0.00015;
+      // Adaptive radius based on zoom level for smoother transitions
+      let radius = 0.0001;
+      if (zoomLevel < 10) radius = 0.00005;
+      else if (zoomLevel < 11) radius = 0.00007;
+      else if (zoomLevel < 12) radius = 0.0001;
+      else if (zoomLevel < 13) radius = 0.00015;
+      else radius = 0.0002;
+      
       items.forEach((item, idx) => {
         const angle = (2 * Math.PI * idx) / items.length;
         const displayLat = item.lat + (radius * Math.sin(angle));
@@ -326,9 +338,10 @@ export default function MapView({ routes = [], buses = [], busLocations = new Ma
     <MapContainer
       center={[23.8103, 90.4125]}
       zoom={12}
-      zoomAnimation={false}
-      fadeAnimation={false}
-      markerZoomAnimation={false}
+      zoomAnimation={true}
+      fadeAnimation={true}
+      markerZoomAnimation={true}
+      zoomAnimationThreshold={4}
       whenReady={(event) => {
         setTimeout(() => event.target.invalidateSize({ pan: false }), 0);
       }}

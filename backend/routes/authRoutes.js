@@ -3,12 +3,15 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const userModel = require('../models/userModel');
-const { sendVerificationEmail } = require('../services/mailer');
+const passwordResetModel = require('../models/passwordResetModel');
+const { sendVerificationEmail, sendPasswordResetEmail } = require('../services/mailer');
 const { verifyToken } = require('../middleware/auth');
 
 const router = express.Router();
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VERIFICATION_TTL_MS = 30 * 60 * 1000;
+const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
+const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key';
 
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 const makeVerificationToken = () => crypto.randomBytes(32).toString('hex');
@@ -44,6 +47,25 @@ const issueVerification = async (user, req) => {
   };
 };
 
+// Simple in-memory rate limiting for auth endpoints
+const loginAttempts = new Map();
+const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
+const MAX_ATTEMPTS = 5;
+
+const checkRateLimit = (identifier) => {
+  const now = Date.now();
+  const attempts = loginAttempts.get(identifier) || [];
+  const recentAttempts = attempts.filter(time => now - time < RATE_LIMIT_WINDOW);
+  
+  if (recentAttempts.length >= MAX_ATTEMPTS) {
+    return false;
+  }
+  
+  recentAttempts.push(now);
+  loginAttempts.set(identifier, recentAttempts);
+  return true;
+};
+
 router.post('/register', async (req, res) => {
   try {
     const { password } = req.body;
@@ -52,6 +74,14 @@ router.post('/register', async (req, res) => {
 
     if (!name || !email || !password) {
       return res.status(400).json({ success: false, message: 'name, email, password are required' });
+    }
+
+    // Rate limiting check for registration
+    if (!checkRateLimit(`register:${email}`)) {
+      return res.status(429).json({ 
+        success: false, 
+        message: 'Too many registration attempts. Please try again in 15 minutes.' 
+      });
     }
 
     if (!EMAIL_REGEX.test(email)) {
@@ -124,6 +154,14 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ success: false, message: 'email and password are required' });
     }
 
+    // Rate limiting check
+    if (!checkRateLimit(email)) {
+      return res.status(429).json({ 
+        success: false, 
+        message: 'Too many login attempts. Please try again in 15 minutes.' 
+      });
+    }
+
     const user = await userModel.getUserByEmail(email);
     if (!user) {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
@@ -145,7 +183,7 @@ router.post('/login', async (req, res) => {
 
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role, name: user.name },
-      process.env.JWT_SECRET || 'super-secret-key',
+      JWT_SECRET,
       { expiresIn: '7d' }
     );
 
@@ -225,6 +263,82 @@ router.post('/resend-verification', async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Error resending verification email', error: error.message });
+  }
+});
+
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const email = normalizeEmail(req.body.email);
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'email is required' });
+    }
+
+    const user = await userModel.getUserByEmail(email);
+    if (!user) {
+      return res.json({
+        success: true,
+        message: 'If the email exists, a reset link has been sent.',
+      });
+    }
+
+    const token = makeVerificationToken();
+    const tokenHash = hashVerificationToken(token);
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+
+    await passwordResetModel.createResetToken({
+      userId: user.id,
+      tokenHash,
+      expiresAt,
+    });
+
+    const resetUrl = `${resolveFrontendUrl(req)}/auth?reset=${token}`;
+    const mail = await sendPasswordResetEmail({
+      email: user.email,
+      name: user.name,
+      resetUrl,
+    });
+
+    return res.json({
+      success: true,
+      message: mail.delivered
+        ? 'If the email exists, a reset link has been sent.'
+        : 'SMTP is not configured, so use the development reset link below.',
+      data: {
+        emailDelivered: mail.delivered,
+        resetUrl: mail.fallbackUrl || resetUrl,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Error requesting password reset', error: error.message });
+  }
+});
+
+router.post('/reset-password', async (req, res) => {
+  try {
+    const token = String(req.body.token || '').trim();
+    const password = String(req.body.password || '');
+
+    if (!token || !password) {
+      return res.status(400).json({ success: false, message: 'token and password are required' });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 8 characters long' });
+    }
+
+    const tokenHash = hashVerificationToken(token);
+    const resetRecord = await passwordResetModel.getActiveTokenByHash(tokenHash);
+    if (!resetRecord) {
+      return res.status(400).json({ success: false, message: 'Reset link is invalid or expired' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    await userModel.updatePasswordHash(resetRecord.user_id, passwordHash);
+    await passwordResetModel.markTokenUsed(resetRecord.id);
+
+    return res.json({ success: true, message: 'Password updated successfully. You can now sign in.' });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Error resetting password', error: error.message });
   }
 });
 

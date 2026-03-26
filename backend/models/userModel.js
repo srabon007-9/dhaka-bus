@@ -80,6 +80,17 @@ const markEmailVerified = async (userId) => {
   return result;
 };
 
+const updatePasswordHash = async (userId, passwordHash) => {
+  const [result] = await pool.query(
+    `UPDATE users
+     SET password_hash = ?
+     WHERE id = ?`,
+    [passwordHash, userId]
+  );
+
+  return result;
+};
+
 module.exports = {
   mapPublicUser,
   createUser,
@@ -89,4 +100,5 @@ module.exports = {
   updateVerificationToken,
   getUserByVerificationTokenHash,
   markEmailVerified,
+  updatePasswordHash,
 };

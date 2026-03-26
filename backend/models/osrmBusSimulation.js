@@ -435,6 +435,13 @@ class OSRMBusSimulator {
     const pauseDuration = Number.isFinite(customDurationMs)
       ? customDurationMs
       : (5000 + Math.random() * 3000);
+
+    if (this.pauseTimer) {
+      clearTimeout(this.pauseTimer);
+      this.pauseTimer = null;
+    }
+
+    this.isMoving = false;
     this.pauseUntilTs = Date.now() + pauseDuration;
     console.log(
       `⏸️  Bus ${this.busId} pausing at stop ${this.currentStopIndex + 1}/${this.stops.length} for ${Math.round(pauseDuration / 1000)}s`
@@ -442,6 +449,7 @@ class OSRMBusSimulator {
 
     this.pauseTimer = setTimeout(() => {
       this.isMoving = true;
+      this.pauseTimer = null;
       this.pauseUntilTs = null;
       console.log(`▶️  Bus ${this.busId} resuming movement`);
     }, pauseDuration);
@@ -514,9 +522,11 @@ class OSRMBusSimulator {
   async update() {
     if (this.isPaused) return;
 
+    if (this.pauseUntilTs && Date.now() < this.pauseUntilTs) {
+      return;
+    }
+
     if (!this.isMoving) {
-      // Start moving from stop
-      this.isMoving = true;
       return;
     }
 

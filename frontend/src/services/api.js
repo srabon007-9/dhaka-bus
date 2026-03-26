@@ -66,8 +66,8 @@ export const ticketApi = {
     const response = await api.post('/tickets/payment/checkout', payload, authConfig(token));
     return response?.data?.data ?? response?.data;
   },
-  completePayment: async (sessionId, token) => {
-    const response = await api.post('/tickets/payment/complete', { session_id: sessionId }, authConfig(token));
+  completePayment: async (paymentRef, token) => {
+    const response = await api.post('/tickets/payment/complete', { payment_ref: paymentRef }, authConfig(token));
     return response?.data?.data ?? response?.data;
   },
   cancel: async (id, token) => normalize(await api.patch(`/tickets/${id}/cancel`, {}, authConfig(token))),
@@ -98,6 +98,14 @@ export const authApi = {
   },
   resendVerification: async (payload) => {
     const response = await api.post('/auth/resend-verification', payload);
+    return response?.data;
+  },
+  forgotPassword: async (payload) => {
+    const response = await api.post('/auth/forgot-password', payload);
+    return response?.data;
+  },
+  resetPassword: async (payload) => {
+    const response = await api.post('/auth/reset-password', payload);
     return response?.data;
   },
 };

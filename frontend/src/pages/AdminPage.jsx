@@ -105,7 +105,21 @@ export default function AdminPage() {
 
   const submitForm = async () => {
     try {
+      // Validation layer
       if (formType === 'bus') {
+        if (!form.name?.trim()) {
+          toast.error('Bus name is required');
+          return;
+        }
+        if (!form.route_id) {
+          toast.error('Route is required');
+          return;
+        }
+        if (Number(form.capacity) < 1 || Number(form.capacity) > 100) {
+          toast.error('Capacity must be between 1 and 100');
+          return;
+        }
+
         const payload = {
           name: form.name,
           route_id: Number(form.route_id),
@@ -121,6 +135,23 @@ export default function AdminPage() {
           toast.success('Bus added.');
         }
       } else if (formType === 'route') {
+        if (!form.route_name?.trim()) {
+          toast.error('Route name is required');
+          return;
+        }
+        if (!form.start_point?.trim()) {
+          toast.error('Start point is required');
+          return;
+        }
+        if (!form.end_point?.trim()) {
+          toast.error('End point is required');
+          return;
+        }
+        if (form.start_point.trim() === form.end_point.trim()) {
+          toast.error('Start and end points must be different');
+          return;
+        }
+
         if (editingId) {
           await routeApi.update(
             editingId,
@@ -141,6 +172,36 @@ export default function AdminPage() {
           toast.success('Route added.');
         }
       } else {
+        // Trip form validation
+        if (!form.route_id) {
+          toast.error('Route is required');
+          return;
+        }
+        if (!form.bus_id) {
+          toast.error('Bus is required');
+          return;
+        }
+        if (!form.departure_time) {
+          toast.error('Departure time is required');
+          return;
+        }
+        if (!form.arrival_time) {
+          toast.error('Arrival time is required');
+          return;
+        }
+        if (new Date(form.departure_time) >= new Date(form.arrival_time)) {
+          toast.error('Arrival time must be after departure time');
+          return;
+        }
+        if (Number(form.fare) < 0) {
+          toast.error('Fare cannot be negative');
+          return;
+        }
+        if (Number(form.total_seats) < 1 || Number(form.total_seats) > 100) {
+          toast.error('Total seats must be between 1 and 100');
+          return;
+        }
+
         const payload = {
           route_id: Number(form.route_id),
           bus_id: Number(form.bus_id),
@@ -161,8 +222,8 @@ export default function AdminPage() {
       setIsOpen(false);
       retry();
       fetchTrips();
-    } catch {
-      toast.error('Could not save changes. Please check your connection and try again.');
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Could not save changes. Please check your connection and try again.');
     }
   };
 

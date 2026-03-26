@@ -48,6 +48,7 @@ export default function useLiveTracking() {
 
     socket.on('connect', () => {
       setError('');
+      console.log('Socket connected successfully');
     });
 
     socket.on('locations:snapshot', (payload) => {
@@ -65,8 +66,12 @@ export default function useLiveTracking() {
       });
     });
 
-    socket.on('connect_error', async () => {
-      await refreshLocations();
+    socket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
+      setError('Live tracking paused - connecting to server...');
+      refreshLocations().catch(() => {
+        setError('Live tracking offline - backend is unreachable');
+      });
     });
 
     const fallbackTimer = setInterval(refreshLocations, 15000);

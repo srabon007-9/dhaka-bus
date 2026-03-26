@@ -4,6 +4,22 @@ Real-time bus tracking and ticket booking platform for Dhaka.
 
 Built with React, Node.js/Express, MySQL, and Docker.
 
+---
+
+## 🚀 **New Here? 👋**
+
+**If you forked the repo or this is your first time**, start here:  
+📖 **[FRIEND_GETTING_STARTED.md](./FRIEND_GETTING_STARTED.md)** ← Step-by-step beginner guide
+
+This walks you through:
+- Installing Docker
+- Running the app with one command
+- Testing all features
+- Making your first code change
+- Contributing back
+
+---
+
 ## 📋 Project Overview
 
 **Dhaka Bus Service** is a comprehensive transportation management platform inspired by Uber, Pathao, and modern airline booking systems. It provides:
