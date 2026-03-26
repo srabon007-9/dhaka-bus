@@ -4,6 +4,7 @@ const ticketModel = require('../models/ticketModel');
 const nagadPaymentModel = require('../models/nagadPaymentModel');
 const manualPaymentModel = require('../models/manualPaymentModel');
 const userModel = require('../models/userModel');
+const { sendPaymentConfirmationEmail } = require('../services/mailer');
 const { verifyToken } = require('../middleware/auth');
 
 const router = express.Router();
@@ -500,10 +501,26 @@ router.post('/payment/manual/complete', verifyToken, async (req, res) => {
       await manualPaymentModel.markPaymentCompleted(payment_id);
 
       const savedTicket = await ticketModel.getTicketById(ticket.id);
+      const builtTicket = buildTicketResponse(savedTicket);
+
+      // Send confirmation email with ticket details
+      try {
+        await sendPaymentConfirmationEmail({
+          email: req.user.email,
+          name: req.user.name,
+          ticket: builtTicket,
+          amount: payment.amount,
+          paymentId: payment_id,
+        });
+      } catch (emailError) {
+        console.error('Failed to send confirmation email:', emailError.message);
+        // Don't fail the booking if email fails
+      }
+
       return res.status(201).json({
         success: true,
         message: 'Payment verified and ticket created!',
-        data: { ticket: buildTicketResponse(savedTicket) },
+        data: { ticket: builtTicket },
       });
     }
 
