@@ -1,5 +1,10 @@
 const jwt = require('jsonwebtoken');
 
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.warn('⚠️ WARNING: JWT_SECRET environment variable not set. Using insecure fallback. Set JWT_SECRET in production!');
+}
+
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -12,7 +17,7 @@ const verifyToken = (req, res, next) => {
   }
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET || 'super-secret-key');
+    const payload = jwt.verify(token, JWT_SECRET || 'super-secret-key');
     req.user = payload;
     return next();
   } catch (error) {

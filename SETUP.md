@@ -96,6 +96,31 @@ docker-compose down
 docker-compose up --build
 ```
 
+### Signup works but no verification email arrives
+
+Email verification requires SMTP settings in the backend container.
+
+1. Create a `.env` file in the project root (same level as `docker-compose.yml`)
+2. Add your SMTP provider values:
+
+```bash
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@example.com
+SMTP_PASS=your-app-password
+SMTP_SECURE=false
+MAIL_FROM=Dhaka Bus <your-email@example.com>
+```
+
+3. Restart services:
+
+```bash
+docker-compose down
+docker-compose up --build
+```
+
+If SMTP is not configured, the app falls back to showing a verification link in the auth screen instead of sending a real inbox email.
+
 ### Full reset
 
 ```bash

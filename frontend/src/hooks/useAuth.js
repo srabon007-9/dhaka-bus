@@ -146,6 +146,8 @@ export default function useAuth() {
     register,
     verifyEmail: authApi.verifyEmail,
     resendVerification: authApi.resendVerification,
+    forgotPassword: authApi.forgotPassword,
+    resetPassword: authApi.resetPassword,
     logout,
   };
 }

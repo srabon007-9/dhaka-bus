@@ -17,7 +17,7 @@ export default function AuthPage() {
   const location = useLocation();
   const redirectTo = location.state?.from?.pathname || '/';
   const [searchParams, setSearchParams] = useSearchParams();
-  const { login, register, loading, verifyEmail, resendVerification } = useAuthContext();
+  const { login, register, loading, verifyEmail, resendVerification, forgotPassword, resetPassword } = useAuthContext();
 
   const [mode, setMode] = useState('login');
   const [form, setForm] = useState(initialForm);
@@ -28,6 +28,10 @@ export default function AuthPage() {
   const [verificationUrl, setVerificationUrl] = useState('');
   const [resending, setResending] = useState(false);
   const [forgotMode, setForgotMode] = useState(false);
+  const [resetToken, setResetToken] = useState('');
+  const [resetPasswordValue, setResetPasswordValue] = useState('');
+  const [resetConfirmValue, setResetConfirmValue] = useState('');
+  const [resetLink, setResetLink] = useState('');
 
   const passwordChecks = useMemo(
     () => [
@@ -58,6 +62,18 @@ export default function AuthPage() {
     runVerification();
   }, [searchParams, setSearchParams, verifyEmail]);
 
+  useEffect(() => {
+    const token = searchParams.get('reset');
+    if (!token) return;
+
+    setResetToken(token);
+    setForgotMode(false);
+    setMode('login');
+    setError('');
+    setInfo('Set a new password for your account.');
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   const updateField = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
@@ -66,6 +82,7 @@ export default function AuthPage() {
     setError('');
     setInfo('');
     setVerificationUrl('');
+    setResetLink('');
   };
 
   const handleSubmit = async (event) => {
@@ -73,7 +90,37 @@ export default function AuthPage() {
     resetMessages();
 
     if (forgotMode) {
-      setInfo('Forgot password UI is ready. Connect a reset-password backend endpoint to send recovery links.');
+      try {
+        const result = await forgotPassword({ email: form.email });
+        setInfo(result?.message || 'If the email exists, a reset link has been sent.');
+        setResetLink(result?.data?.resetUrl || '');
+      } catch (forgotError) {
+        setError(forgotError?.response?.data?.message || 'Could not process password reset request');
+      }
+      return;
+    }
+
+    if (resetToken) {
+      if (resetPasswordValue.length < 8) {
+        setError('Use a password with at least 8 characters.');
+        return;
+      }
+
+      if (resetPasswordValue !== resetConfirmValue) {
+        setError('Password confirmation does not match.');
+        return;
+      }
+
+      try {
+        const result = await resetPassword({ token: resetToken, password: resetPasswordValue });
+        setInfo(result?.message || 'Password updated successfully. You can sign in now.');
+        setResetToken('');
+        setResetPasswordValue('');
+        setResetConfirmValue('');
+        setMode('login');
+      } catch (resetError) {
+        setError(resetError?.response?.data?.message || 'Could not reset password');
+      }
       return;
     }
 
@@ -111,14 +158,17 @@ export default function AuthPage() {
       return;
     }
 
+    const registerResponse = result?.data || {};
+    const registerPayload = registerResponse?.data || {};
+
     setPendingEmail(form.email);
     setMode('login');
     setInfo(
-      result?.data?.emailDelivered
-        ? (result?.message || 'Account created. Check your email to verify your account.')
-        : (result?.message || 'Account created. Email delivery is not configured here, so use the verification link below.')
+      registerPayload?.emailDelivered
+        ? (registerResponse?.message || 'Account created. Check your email to verify your account.')
+        : (registerResponse?.message || 'Account created. Email delivery is not configured here, so use the verification link below.')
     );
-    setVerificationUrl(result?.data?.verificationUrl || '');
+    setVerificationUrl(registerPayload?.verificationUrl || '');
   };
 
   const handleResend = async () => {
@@ -172,12 +222,12 @@ export default function AuthPage() {
         <div className="shell-card rounded-[36px] p-6 sm:p-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="eyebrow">{forgotMode ? 'Recovery' : mode === 'login' ? 'Sign In' : 'Create Account'}</p>
+              <p className="eyebrow">{resetToken ? 'Reset Password' : forgotMode ? 'Recovery' : mode === 'login' ? 'Sign In' : 'Create Account'}</p>
               <h2 className="mt-2 text-3xl font-extrabold tracking-[-0.03em] text-slate-100">
-                {forgotMode ? 'Forgot your password?' : mode === 'login' ? 'Welcome back' : 'Create your rider account'}
+                {resetToken ? 'Set a new password' : forgotMode ? 'Forgot your password?' : mode === 'login' ? 'Welcome back' : 'Create your rider account'}
               </h2>
             </div>
-            {!forgotMode ? (
+            {!forgotMode && !resetToken ? (
               <div className="rounded-full bg-white/5 p-1">
                 <button
                   type="button"
@@ -223,7 +273,7 @@ export default function AuthPage() {
               />
             </div>
 
-            {!forgotMode ? (
+            {!forgotMode && !resetToken ? (
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-200">Password</label>
                 <div className="relative">
@@ -246,8 +296,35 @@ export default function AuthPage() {
               </div>
             ) : null}
 
-            {mode === 'register' && !forgotMode ? (
-              <div className="grid gap-2 rounded-[24px] bg-white/5 p-4 text-sm text-slate-300">
+            {resetToken ? (
+              <>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-200">New Password</label>
+                  <input
+                    required
+                    type={showPassword ? 'text' : 'password'}
+                    value={resetPasswordValue}
+                    onChange={(event) => setResetPasswordValue(event.target.value)}
+                    placeholder="Enter new password"
+                    className="field"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-200">Confirm Password</label>
+                  <input
+                    required
+                    type={showPassword ? 'text' : 'password'}
+                    value={resetConfirmValue}
+                    onChange={(event) => setResetConfirmValue(event.target.value)}
+                    placeholder="Re-enter new password"
+                    className="field"
+                  />
+                </div>
+              </>
+            ) : null}
+
+            {mode === 'register' && !forgotMode && !resetToken ? (
+              <div className="grid gap-2 rounded-3xl bg-white/5 p-4 text-sm text-slate-300">
                 {passwordChecks.map((check) => (
                   <div key={check.label} className="flex items-center gap-2">
                     <span className={`inline-block h-2.5 w-2.5 rounded-full ${check.valid ? 'bg-emerald-500' : 'bg-slate-300'}`} />
@@ -257,7 +334,7 @@ export default function AuthPage() {
               </div>
             ) : null}
 
-            {!forgotMode ? (
+            {!forgotMode && !resetToken ? (
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <label className="flex items-center gap-3 text-sm text-slate-300">
                   <input
@@ -280,22 +357,26 @@ export default function AuthPage() {
                 </button>
               </div>
             ) : (
-              <div className="rounded-[24px] bg-amber-400/12 p-4 text-sm leading-6 text-amber-200">
-                This screen is ready for a reset-password backend. Once you add a reset endpoint, this form can dispatch real recovery emails.
+              <div className="rounded-3xl bg-amber-400/12 p-4 text-sm leading-6 text-amber-200">
+                Enter your account email and request a secure reset link.
               </div>
             )}
 
-            {info ? <div className="rounded-[24px] bg-emerald-500/12 px-4 py-3 text-sm text-emerald-200">{info}</div> : null}
-            {error ? <div className="rounded-[24px] bg-rose-500/12 px-4 py-3 text-sm text-rose-200">{error}</div> : null}
+            {info ? <div className="rounded-3xl bg-emerald-500/12 px-4 py-3 text-sm text-emerald-200">{info}</div> : null}
+            {error ? <div className="rounded-3xl bg-rose-500/12 px-4 py-3 text-sm text-rose-200">{error}</div> : null}
 
             <button type="submit" disabled={loading || resending} className="btn-primary w-full">
               {loading
-                ? forgotMode
+                ? resetToken
+                  ? 'Updating password...'
+                  : forgotMode
                   ? 'Preparing...'
                   : mode === 'login'
                     ? 'Signing in...'
                     : 'Creating account...'
-                : forgotMode
+                : resetToken
+                  ? 'Update Password'
+                  : forgotMode
                   ? 'Request password help'
                   : mode === 'login'
                     ? 'Sign In'
@@ -304,10 +385,17 @@ export default function AuthPage() {
           </form>
 
           <div className="mt-6 flex flex-wrap gap-3">
-            {forgotMode ? (
+            {forgotMode || resetToken ? (
               <button
                 type="button"
-                onClick={() => setForgotMode(false)}
+                onClick={() => {
+                  setForgotMode(false);
+                  setResetToken('');
+                  setResetPasswordValue('');
+                  setResetConfirmValue('');
+                  setError('');
+                  setInfo('');
+                }}
                 className="btn-secondary"
               >
                 Back to sign in
@@ -338,6 +426,21 @@ export default function AuthPage() {
                   {verificationUrl}
                 </a>
               ) : null}
+            </div>
+          ) : null}
+
+          {resetLink ? (
+            <div className="mt-6 rounded-[28px] border border-white/10 bg-white/5 p-5">
+              <p className="text-sm font-semibold text-slate-100">Development reset link</p>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                SMTP is not configured in this environment. Use the link below to continue password reset.
+              </p>
+              <a
+                href={resetLink}
+                className="mt-4 block break-all rounded-[20px] bg-slate-950 px-4 py-3 text-sm font-medium text-cyan-300 shadow-sm"
+              >
+                {resetLink}
+              </a>
             </div>
           ) : null}
         </div>

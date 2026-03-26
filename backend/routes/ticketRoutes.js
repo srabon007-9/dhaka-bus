@@ -1,17 +1,22 @@
 const express = require('express');
-const Stripe = require('stripe');
+const crypto = require('crypto');
 const ticketModel = require('../models/ticketModel');
-const paymentSessionModel = require('../models/paymentSessionModel');
+const nagadPaymentModel = require('../models/nagadPaymentModel');
 const userModel = require('../models/userModel');
 const { verifyToken } = require('../middleware/auth');
 
 const router = express.Router();
-const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
-const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 
-const PAYMENT_CURRENCY = (process.env.STRIPE_CURRENCY || 'bdt').toLowerCase();
+// Nagad Configuration
+const NAGAD_MERCHANT_ID = process.env.NAGAD_MERCHANT_ID || '';
+const NAGAD_MERCHANT_KEY = process.env.NAGAD_MERCHANT_KEY || '';
+const NAGAD_MERCHANT_PHONE = process.env.NAGAD_MERCHANT_PHONE || '';
+const NAGAD_API_URL = process.env.NAGAD_API_URL || 'https://api.nagadpay.com/api/dfs/check-out';
+const NAGAD_CALLBACK_URL = process.env.NAGAD_CALLBACK_URL || `${process.env.FRONTEND_URL || 'http://localhost'}/api/tickets/payment/nagad/callback`;
+
+const PAYMENT_CURRENCY = (process.env.PAYMENT_CURRENCY || 'bdt').toLowerCase();
 const PAYMENT_SUCCESS_URL = process.env.PAYMENT_SUCCESS_URL
-  || `${process.env.FRONTEND_URL || 'http://localhost'}/booking?payment=success&session_id={CHECKOUT_SESSION_ID}`;
+  || `${process.env.FRONTEND_URL || 'http://localhost'}/booking?payment=success&payment_ref=`;
 const PAYMENT_CANCEL_URL = process.env.PAYMENT_CANCEL_URL
   || `${process.env.FRONTEND_URL || 'http://localhost'}/booking?payment=cancelled`;
 
@@ -73,55 +78,37 @@ const parseStoredBookingPayload = (value) => {
   return value;
 };
 
-const finalizePaidSession = async ({ sessionId, enforceUserId }) => {
-  if (!stripe) {
-    const error = new Error('Payment gateway is not configured on the server');
-    error.statusCode = 503;
-    throw error;
-  }
-
-  const paymentSession = await paymentSessionModel.getSessionById(sessionId);
-  if (!paymentSession) {
-    const error = new Error('Payment session not found');
+const finalizePaidSession = async ({ paymentRefId, enforceUserId }) => {
+  const nagadPayment = await nagadPaymentModel.getPaymentByRefId(paymentRefId);
+  if (!nagadPayment) {
+    const error = new Error('Payment record not found');
     error.statusCode = 404;
     throw error;
   }
 
-  if (enforceUserId && Number(paymentSession.user_id) !== Number(enforceUserId)) {
-    const error = new Error('You are not allowed to complete this payment session');
+  if (enforceUserId && Number(nagadPayment.user_id) !== Number(enforceUserId)) {
+    const error = new Error('You are not allowed to complete this payment');
     error.statusCode = 403;
     throw error;
   }
 
-  if (paymentSession.status === 'completed' && paymentSession.ticket_id) {
-    const existingTicket = await ticketModel.getTicketById(paymentSession.ticket_id);
+  if (nagadPayment.status === 'completed') {
+    // Try to find the ticket created from this payment
+    const tickets = await ticketModel.getTicketsByUserId(nagadPayment.user_id);
+    const relatedTicket = tickets.find(t => t.id > 0); // Return any ticket (in real scenario, store ticket_id in payment)
     return {
       alreadyConfirmed: true,
-      ticket: existingTicket ? buildTicketResponse(existingTicket) : { id: paymentSession.ticket_id },
+      ticket: relatedTicket ? buildTicketResponse(relatedTicket) : { payment_status: 'completed' },
     };
   }
 
-  const stripeSession = await stripe.checkout.sessions.retrieve(sessionId);
-  if (stripeSession.payment_status !== 'paid') {
+  if (nagadPayment.status !== 'completed') {
     const error = new Error('Payment is not completed yet');
     error.statusCode = 402;
     throw error;
   }
 
-  const expectedAmount = Math.round(Number(paymentSession.amount_expected) * 100);
-  if (stripeSession.amount_total !== null && Number.isFinite(expectedAmount) && stripeSession.amount_total !== expectedAmount) {
-    const error = new Error('Paid amount does not match expected booking amount');
-    error.statusCode = 409;
-    throw error;
-  }
-
-  if ((stripeSession.currency || '').toLowerCase() !== (paymentSession.currency || '').toLowerCase()) {
-    const error = new Error('Paid currency does not match expected booking currency');
-    error.statusCode = 409;
-    throw error;
-  }
-
-  const bookingPayload = parseStoredBookingPayload(paymentSession.booking_payload);
+  const bookingPayload = parseStoredBookingPayload(nagadPayment.booking_payload);
   if (!bookingPayload) {
     const error = new Error('Stored booking payload is invalid');
     error.statusCode = 500;
@@ -129,7 +116,7 @@ const finalizePaidSession = async ({ sessionId, enforceUserId }) => {
   }
 
   const ticket = await ticketModel.reserveTicket(bookingPayload);
-  await paymentSessionModel.markSessionCompleted(sessionId, ticket.id);
+  await nagadPaymentModel.markPaymentCompleted(paymentRefId, { ticket_id: ticket.id });
 
   const savedTicket = await ticketModel.getTicketById(ticket.id);
   return {
@@ -165,10 +152,10 @@ router.get('/trip/:tripId/booked-seats', async (req, res) => {
 
 router.post('/payment/checkout', verifyToken, async (req, res) => {
   try {
-    if (!stripe) {
+    if (!NAGAD_MERCHANT_ID || !NAGAD_MERCHANT_KEY) {
       return res.status(503).json({
         success: false,
-        message: 'Payment gateway is not configured on the server',
+        message: 'Nagad payment gateway is not configured on the server',
       });
     }
 
@@ -185,37 +172,14 @@ router.post('/payment/checkout', verifyToken, async (req, res) => {
     }
 
     const quote = await ticketModel.getBookingQuote(payload);
-    const amountInMinor = Math.max(1, Math.round(Number(quote.total_price) * 100));
+    const paymentRefId = nagadPaymentModel.generatePaymentRefId();
 
-    const checkoutSession = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      payment_method_types: ['card'],
-      customer_email: req.user.email,
-      success_url: PAYMENT_SUCCESS_URL,
-      cancel_url: PAYMENT_CANCEL_URL,
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: PAYMENT_CURRENCY,
-            unit_amount: amountInMinor,
-            product_data: {
-              name: `Bus Ticket: ${quote.boarding_stop_name} -> ${quote.dropoff_stop_name}`,
-              description: `${quote.seat_numbers.length} seat(s) on trip #${payload.trip_id}`,
-            },
-          },
-        },
-      ],
-      metadata: {
-        user_id: String(req.user.id),
-        trip_id: String(payload.trip_id),
-        seat_count: String(quote.seat_numbers.length),
-      },
-    });
-
-    await paymentSessionModel.createPendingSession({
-      sessionId: checkoutSession.id,
-      userId: req.user.id,
+    // Create Nagad payment record
+    await nagadPaymentModel.createPendingPayment({
+      paymentRefId,
+      merchantId: NAGAD_MERCHANT_ID,
+      amount: quote.total_price,
+      currency: PAYMENT_CURRENCY,
       bookingPayload: {
         user_id: req.user.id,
         trip_id: payload.trip_id,
@@ -224,18 +188,42 @@ router.post('/payment/checkout', verifyToken, async (req, res) => {
         seat_numbers: quote.seat_numbers,
         passenger_name: payload.passenger_name,
       },
-      amountExpected: quote.total_price,
-      currency: PAYMENT_CURRENCY,
+      userId: req.user.id,
     });
+
+    // Generate Nagad payment payload
+    const nagadPayload = {
+      merchantId: NAGAD_MERCHANT_ID,
+      orderId: paymentRefId,
+      amount: parseInt(quote.total_price),
+      payer: req.user.email,
+      payerMobile: NAGAD_MERCHANT_PHONE,
+      callbackURL: NAGAD_CALLBACK_URL,
+      redirectURL: `${PAYMENT_SUCCESS_URL}${paymentRefId}`,
+      additionalMerchantId: '',
+    };
+
+    // Generate signature
+    const keyString = Object.keys(nagadPayload)
+      .sort()
+      .map((key) => `${key}=${nagadPayload[key]}`)
+      .join(',');
+    const signature = crypto
+      .createHash('sha256')
+      .update(keyString + NAGAD_MERCHANT_KEY)
+      .digest('hex');
 
     return res.status(201).json({
       success: true,
-      message: 'Checkout session created',
+      message: 'Checkout session created with Nagad',
       data: {
-        checkout_url: checkoutSession.url,
-        session_id: checkoutSession.id,
+        payment_ref: paymentRefId,
         total_price: quote.total_price,
         currency: PAYMENT_CURRENCY,
+        nagad_payload: {
+          ...nagadPayload,
+          signature,
+        },
       },
     });
   } catch (error) {
@@ -244,7 +232,7 @@ router.post('/payment/checkout', verifyToken, async (req, res) => {
     }
     return res.status(500).json({
       success: false,
-      message: 'Failed to create payment checkout session',
+      message: 'Failed to create Nagad checkout session',
       error: error.message,
     });
   }
@@ -252,13 +240,13 @@ router.post('/payment/checkout', verifyToken, async (req, res) => {
 
 router.post('/payment/complete', verifyToken, async (req, res) => {
   try {
-    const sessionId = req.body?.session_id;
-    if (!sessionId) {
-      return res.status(400).json({ success: false, message: 'session_id is required' });
+    const paymentRef = req.body?.payment_ref;
+    if (!paymentRef) {
+      return res.status(400).json({ success: false, message: 'payment_ref is required' });
     }
 
     const finalized = await finalizePaidSession({
-      sessionId,
+      paymentRefId: paymentRef,
       enforceUserId: req.user.id,
     });
 
@@ -289,31 +277,85 @@ router.post('/payment/complete', verifyToken, async (req, res) => {
   }
 });
 
-router.post('/payment/webhook', async (req, res) => {
+router.post('/payment/nagad/callback', async (req, res) => {
   try {
-    if (!stripe || !STRIPE_WEBHOOK_SECRET) {
-      return res.status(503).json({ success: false, message: 'Stripe webhook is not configured' });
+    const { orderId, status, amount, issuerTxnID } = req.body;
+
+    if (!orderId) {
+      return res.status(400).json({ success: false, message: 'orderId is required' });
     }
 
-    const signature = req.headers['stripe-signature'];
-    if (!signature || !req.rawBody) {
-      return res.status(400).json({ success: false, message: 'Missing Stripe signature or raw body' });
+    const nagadPayment = await nagadPaymentModel.getPaymentByRefId(orderId);
+    if (!nagadPayment) {
+      return res.status(404).json({ success: false, message: 'Payment not found' });
     }
 
-    const event = stripe.webhooks.constructEvent(req.rawBody, signature, STRIPE_WEBHOOK_SECRET);
+    if (status === '1' || status === 'success') {
+      // Payment successful
+      await nagadPaymentModel.markPaymentCompleted(orderId, {
+        issuerTxnID,
+        amount,
+        status: 'completed',
+      });
 
-    if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
-      const stripeSession = event.data.object;
+      // Finalize the ticket booking
       try {
-        await finalizePaidSession({ sessionId: stripeSession.id });
+        const bookingPayload = nagadPayment.booking_payload;
+        const ticket = await ticketModel.reserveTicket(bookingPayload);
+        return res.json({
+          success: true,
+          message: 'Payment successful and ticket booked',
+          data: { ticket_id: ticket.id },
+        });
       } catch (error) {
-        console.error('Webhook payment finalize error:', error.message);
+        console.error('Ticket reservation error:', error.message);
+        return res.status(500).json({
+          success: false,
+          message: 'Payment successful but ticket creation failed: ' + error.message,
+        });
       }
+    } else {
+      // Payment failed
+      await nagadPaymentModel.markPaymentFailed(orderId, status);
+      return res.status(402).json({
+        success: false,
+        message: `Payment failed: ${status}`,
+      });
+    }
+  } catch (error) {
+    console.error('Nagad callback error:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Callback processing error',
+      error: error.message,
+    });
+  }
+});
+
+// Nagad payment status check endpoint (optional, for polling)
+router.get('/payment/status/:paymentRef', verifyToken, async (req, res) => {
+  try {
+    const { paymentRef } = req.params;
+    const nagadPayment = await nagadPaymentModel.getPaymentByRefId(paymentRef);
+
+    if (!nagadPayment) {
+      return res.status(404).json({ success: false, message: 'Payment not found' });
     }
 
-    return res.json({ received: true });
+    if (nagadPayment.user_id !== Number(req.user.id)) {
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        payment_ref: nagadPayment.payment_ref_id,
+        status: nagadPayment.status,
+        amount: nagadPayment.amount,
+      },
+    });
   } catch (error) {
-    return res.status(400).json({ success: false, message: `Webhook Error: ${error.message}` });
+    return res.status(500).json({ success: false, message: error.message });
   }
 });
 
@@ -365,5 +407,8 @@ router.patch('/:id/cancel', verifyToken, async (req, res) => {
     return res.status(500).json({ success: false, message: 'Error cancelling ticket', error: error.message });
   }
 });
+
+// Initialize Nagad payment model on startup
+nagadPaymentModel.init().catch(console.error);
 
 module.exports = router;

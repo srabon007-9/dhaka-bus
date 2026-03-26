@@ -93,7 +93,7 @@ export default function BookingPage() {
   useEffect(() => {
     const search = new URLSearchParams(window.location.search);
     const paymentStatus = search.get('payment');
-    const sessionId = search.get('session_id');
+    const paymentRef = search.get('payment_ref');
 
     if (paymentStatus === 'cancelled') {
       toast.info('Payment was cancelled. You can try again.');
@@ -101,11 +101,11 @@ export default function BookingPage() {
       return;
     }
 
-    if (paymentStatus === 'success' && sessionId && token) {
+    if (paymentStatus === 'success' && paymentRef && token) {
       const finalizePayment = async () => {
         setProcessing(true);
         try {
-          const result = await ticketApi.completePayment(sessionId, token);
+          const result = await ticketApi.completePayment(paymentRef, token);
           const ticket = result?.ticket;
 
           if (!ticket) {
@@ -257,16 +257,32 @@ export default function BookingPage() {
         token
       );
 
-      if (!checkout?.checkout_url) {
-        throw new Error('Payment gateway did not return a checkout URL.');
+      if (!checkout?.nagad_payload) {
+        throw new Error('Payment gateway did not return checkout details.');
       }
 
-      window.location.assign(checkout.checkout_url);
+      // Submit Nagad payment form
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = checkout.nagad_payload.apiURL || 'https://api.nagadpay.com/api/dfs/check-out';
+      form.style.display = 'none';
+
+      Object.entries(checkout.nagad_payload).forEach(([key, value]) => {
+        if (key !== 'apiURL') {
+          const input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = key;
+          input.value = value;
+          form.appendChild(input);
+        }
+      });
+
+      document.body.appendChild(form);
+      form.submit();
+      document.body.removeChild(form);
     } catch (error) {
       toast.error(error?.response?.data?.message || 'Unable to start payment. Please try again.');
       setProcessing(false);
-    } finally {
-      // Keep processing state during Stripe redirect; reset only on error or callback completion.
     }
   };
 
