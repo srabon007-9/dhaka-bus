@@ -14,7 +14,6 @@ export default function AdminPage() {
   const { token } = useAuthContext();
   const { buses, routes, retry } = useLiveTracking();
   const [trips, setTrips] = useState([]);
-  const [activeTab, setActiveTab] = useState('Buses');
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formType, setFormType] = useState('bus');
@@ -330,29 +329,7 @@ export default function AdminPage() {
 
   return (
     <PageMotion>
-      <AdminLayout>
-        <div className="space-y-6">
-          {/* Tab Navigation */}
-          <div className="flex gap-2 border-b border-slate-700">
-            {['Buses', 'Routes', 'Trips', 'Payments'].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 font-semibold transition-colors ${
-                  activeTab === tab
-                    ? 'text-cyan-500 border-b-2 border-cyan-500'
-                    : 'text-slate-400 hover:text-slate-300'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-
-          {/* Tab Content */}
-          {renderPanel(activeTab)}
-        </div>
-      </AdminLayout>
+      <AdminLayout>{renderPanel}</AdminLayout>
 
       <Modal
         title={formType === 'bus' ? `${editingId ? 'Edit' : 'Add'} Bus` : formType === 'route' ? `${editingId ? 'Edit' : 'Add'} Route` : `${editingId ? 'Edit' : 'Add'} Trip`}
