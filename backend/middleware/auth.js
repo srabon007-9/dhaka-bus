@@ -1,9 +1,7 @@
 const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  console.warn('⚠️ WARNING: JWT_SECRET environment variable not set. Using insecure fallback. Set JWT_SECRET in production!');
-}
+if (!JWT_SECRET) console.warn('⚠️ JWT_SECRET not set - set in production!');
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization || '';
