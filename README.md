@@ -52,7 +52,7 @@ This walks you through:
 
 ### Database
 - **System**: MySQL 8.0
-- **Tables**: 6 tables (buses, locations, routes, users, trips, tickets)
+- **Tables**: Core booking + tracking tables with seat-level passenger data and event logs
 - **Relationships**: Foreign keys between trips/buses/routes/users
 - **Indexes**: Performance optimized queries
 
@@ -106,6 +106,8 @@ This walks you through:
 ✅ Display booking status (active/cancelled)
 ✅ Show route name, departure time, seat numbers
 ✅ Display ticket ID and total fare
+✅ Per-seat passenger identity stored and shown in ticket history
+✅ Explicit boarding/alighting event logging for stop-level passenger flow
 ```
 
 ### 5. Admin Dashboard
@@ -235,6 +237,10 @@ GET    /api/tickets                    # Get user's tickets (protected)
 POST   /api/tickets                    # Create booking (protected)
 GET    /api/tickets/trip/:tripId/booked-seats  # Check seat availability
 PATCH  /api/tickets/:id/cancel         # Cancel ticket (protected)
+GET    /api/tickets/:ticketId/events            # Get ticket passenger events (owner/admin)
+POST   /api/tickets/:ticketId/events/board      # Record boarding event (admin)
+POST   /api/tickets/:ticketId/events/alight     # Record alighting event (admin)
+GET    /api/tickets/trips/:tripId/passenger-flow # Stop-level flow summary (admin)
 ```
 
 ### Locations

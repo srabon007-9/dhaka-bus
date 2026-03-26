@@ -1,4 +1,6 @@
 export default function TicketCard({ ticket }) {
+  const passengerDetails = Array.isArray(ticket.passengerDetails) ? ticket.passengerDetails : [];
+
   return (
     <article className="rounded-2xl border border-cyan-300/30 bg-slate-900/60 p-5 shadow-lg">
       <div className="flex items-start justify-between">
@@ -28,7 +30,17 @@ export default function TicketCard({ ticket }) {
         </div>
         <div>
           <p className="text-xs text-slate-400">Passenger</p>
-          <p>{ticket.passengerName}</p>
+          {passengerDetails.length > 0 ? (
+            <div className="space-y-1">
+              {passengerDetails.map((item) => (
+                <p key={`${ticket.id}-${item.seat_number}`} className="text-xs">
+                  S{item.seat_number}: {item.passenger_name}
+                </p>
+              ))}
+            </div>
+          ) : (
+            <p>{ticket.passengerName}</p>
+          )}
         </div>
         <div>
           <p className="text-xs text-slate-400">Fare</p>

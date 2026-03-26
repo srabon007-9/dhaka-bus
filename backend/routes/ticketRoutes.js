@@ -3,9 +3,10 @@ const crypto = require('crypto');
 const ticketModel = require('../models/ticketModel');
 const nagadPaymentModel = require('../models/nagadPaymentModel');
 const manualPaymentModel = require('../models/manualPaymentModel');
+const passengerFlowModel = require('../models/passengerFlowModel');
 const userModel = require('../models/userModel');
 const { sendPaymentConfirmationEmail } = require('../services/mailer');
-const { verifyToken } = require('../middleware/auth');
+const { verifyToken, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -37,14 +38,18 @@ const parseBookingPayload = (body) => ({
   dropoff_stop_id: Number(body.dropoff_stop_id),
   seat_numbers: Array.isArray(body.seat_numbers) ? body.seat_numbers : [],
   passenger_name: typeof body.passenger_name === 'string' ? body.passenger_name.trim() : '',
+  passenger_details: Array.isArray(body.passenger_details) ? body.passenger_details : [],
 });
 
 const ensureBookingPayload = (payload) => {
-  const { trip_id, boarding_stop_id, dropoff_stop_id, seat_numbers, passenger_name } = payload;
+  const { trip_id, boarding_stop_id, dropoff_stop_id, seat_numbers, passenger_name, passenger_details } = payload;
 
-  if (!trip_id || !boarding_stop_id || !dropoff_stop_id || !Array.isArray(seat_numbers) || !seat_numbers.length || !passenger_name) {
+  const hasPassengerName = Boolean(passenger_name);
+  const hasPassengerDetails = Array.isArray(passenger_details) && passenger_details.length > 0;
+
+  if (!trip_id || !boarding_stop_id || !dropoff_stop_id || !Array.isArray(seat_numbers) || !seat_numbers.length || (!hasPassengerName && !hasPassengerDetails)) {
     throw new ticketModel.TicketValidationError(
-      'trip_id, boarding_stop_id, dropoff_stop_id, seat_numbers (array), and passenger_name are required',
+      'trip_id, boarding_stop_id, dropoff_stop_id, seat_numbers (array), and passenger_name or passenger_details are required',
       400
     );
   }
@@ -74,6 +79,7 @@ const buildTicketResponse = (ticket) => ({
   })(),
   total_price: ticket.total_price,
   passenger_name: ticket.passenger_name,
+  passenger_details: Array.isArray(ticket.passenger_details) ? ticket.passenger_details : [],
   status: ticket.status,
 });
 
@@ -190,6 +196,7 @@ router.post('/payment/checkout', verifyToken, async (req, res) => {
           dropoff_stop_id: payload.dropoff_stop_id,
           seat_numbers: quote.seat_numbers,
           passenger_name: payload.passenger_name,
+          passenger_details: payload.passenger_details,
         },
         userId: req.user.id,
       });
@@ -253,6 +260,7 @@ router.post('/payment/checkout', verifyToken, async (req, res) => {
         dropoff_stop_id: payload.dropoff_stop_id,
         seat_numbers: quote.seat_numbers,
         passenger_name: payload.passenger_name,
+        passenger_details: payload.passenger_details,
       },
       userId: req.user.id,
     });
@@ -444,6 +452,7 @@ router.post('/', verifyToken, async (req, res) => {
       dropoff_stop_id: payload.dropoff_stop_id,
       seat_numbers: payload.seat_numbers,
       passenger_name: payload.passenger_name,
+      passenger_details: payload.passenger_details,
     });
 
     return res.status(201).json({
@@ -469,6 +478,112 @@ router.patch('/:id/cancel', verifyToken, async (req, res) => {
     return res.json({ success: true, message: 'Ticket cancelled successfully' });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Error cancelling ticket', error: error.message });
+  }
+});
+
+router.post('/:ticketId/events/board', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await passengerFlowModel.recordEvent({
+      ticketId: req.params.ticketId,
+      eventType: 'board',
+      stopId: req.body?.stop_id,
+      seatNumbers: req.body?.seat_numbers,
+      recordedByUserId: req.user?.id,
+      notes: req.body?.notes,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Boarding event recorded',
+      data: result,
+    });
+  } catch (error) {
+    if (error instanceof passengerFlowModel.PassengerFlowValidationError) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to record boarding event',
+      error: error.message,
+    });
+  }
+});
+
+router.post('/:ticketId/events/alight', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await passengerFlowModel.recordEvent({
+      ticketId: req.params.ticketId,
+      eventType: 'alight',
+      stopId: req.body?.stop_id,
+      seatNumbers: req.body?.seat_numbers,
+      recordedByUserId: req.user?.id,
+      notes: req.body?.notes,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Alighting event recorded',
+      data: result,
+    });
+  } catch (error) {
+    if (error instanceof passengerFlowModel.PassengerFlowValidationError) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to record alighting event',
+      error: error.message,
+    });
+  }
+});
+
+router.get('/:ticketId/events', verifyToken, async (req, res) => {
+  try {
+    const data = await passengerFlowModel.getTicketEvents({
+      ticketId: req.params.ticketId,
+      requesterUserId: req.user?.id,
+      requesterRole: req.user?.role,
+    });
+
+    return res.json({
+      success: true,
+      message: 'Passenger events fetched successfully',
+      data,
+    });
+  } catch (error) {
+    if (error instanceof passengerFlowModel.PassengerFlowValidationError) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch passenger events',
+      error: error.message,
+    });
+  }
+});
+
+router.get('/trips/:tripId/passenger-flow', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const data = await passengerFlowModel.getTripPassengerFlow(req.params.tripId);
+
+    return res.json({
+      success: true,
+      message: 'Trip passenger flow fetched successfully',
+      data,
+    });
+  } catch (error) {
+    if (error instanceof passengerFlowModel.PassengerFlowValidationError) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch trip passenger flow',
+      error: error.message,
+    });
   }
 });
 
@@ -607,7 +722,7 @@ router.get('/admin/payments/pending', verifyToken, async (req, res) => {
         amount: p.amount,
         currency: p.currency,
         method: p.payment_method,
-        status: p.status,
+        status: p.admin_status || p.status,
         created_at: p.created_at,
         expires_at: p.expires_at,
       })),

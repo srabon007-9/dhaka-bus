@@ -79,6 +79,34 @@ export const ticketApi = {
     return response?.data?.data ?? response?.data;
   },
   cancel: async (id, token) => normalize(await api.patch(`/tickets/${id}/cancel`, {}, authConfig(token))),
+  getPendingPayments: async (token) => {
+    const response = await api.get('/tickets/admin/payments/pending', authConfig(token));
+    return response?.data?.data ?? response?.data ?? [];
+  },
+  verifyPayment: async (paymentId, notes, token) => {
+    const response = await api.post(`/tickets/admin/payments/${paymentId}/verify`, { notes }, authConfig(token));
+    return response?.data?.data ?? response?.data;
+  },
+  rejectPayment: async (paymentId, reason, token) => {
+    const response = await api.post(`/tickets/admin/payments/${paymentId}/reject`, { reason }, authConfig(token));
+    return response?.data?.data ?? response?.data;
+  },
+  getTicketEvents: async (ticketId, token) => {
+    const response = await api.get(`/tickets/${ticketId}/events`, authConfig(token));
+    return response?.data?.data ?? response?.data ?? [];
+  },
+  recordBoardEvent: async (ticketId, payload, token) => {
+    const response = await api.post(`/tickets/${ticketId}/events/board`, payload, authConfig(token));
+    return response?.data?.data ?? response?.data;
+  },
+  recordAlightEvent: async (ticketId, payload, token) => {
+    const response = await api.post(`/tickets/${ticketId}/events/alight`, payload, authConfig(token));
+    return response?.data?.data ?? response?.data;
+  },
+  getTripPassengerFlow: async (tripId, token) => {
+    const response = await api.get(`/tickets/trips/${tripId}/passenger-flow`, authConfig(token));
+    return response?.data?.data ?? response?.data;
+  },
 };
 
 export const authApi = {

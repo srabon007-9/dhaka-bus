@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 export default function useToast() {
   const [toasts, setToasts] = useState([]);
@@ -13,11 +13,15 @@ export default function useToast() {
     setTimeout(() => removeToast(id), 3500);
   }, [removeToast]);
 
-  return {
+  const success = useCallback((message) => addToast('success', message), [addToast]);
+  const error = useCallback((message) => addToast('error', message), [addToast]);
+  const info = useCallback((message) => addToast('info', message), [addToast]);
+
+  return useMemo(() => ({
     toasts,
     removeToast,
-    success: (message) => addToast('success', message),
-    error: (message) => addToast('error', message),
-    info: (message) => addToast('info', message),
-  };
+    success,
+    error,
+    info,
+  }), [toasts, removeToast, success, error, info]);
 }

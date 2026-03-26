@@ -108,6 +108,7 @@ export default function TicketsPage() {
                   boardingStop: ticket.boarding_stop_name,
                   dropoffStop: ticket.dropoff_stop_name,
                   passengerName: ticket.passenger_name,
+                  passengerDetails: ticket.passenger_details,
                   totalPrice: Number(ticket.total_price).toFixed(2),
                   status: ticket.status,
                 }}

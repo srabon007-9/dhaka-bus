@@ -2,6 +2,13 @@
 
 const pool = require('../config/database');
 
+let latestLocationsCache = {
+  data: null,
+  fetchedAt: 0,
+};
+
+const LATEST_LOCATIONS_CACHE_TTL_MS = 1500;
+
 // Get all current locations for all buses
 const getAllLocations = async () => {
   try {
@@ -16,6 +23,11 @@ const getAllLocations = async () => {
 // Get latest location for every bus
 const getLatestLocations = async () => {
   try {
+    const now = Date.now();
+    if (latestLocationsCache.data && now - latestLocationsCache.fetchedAt < LATEST_LOCATIONS_CACHE_TTL_MS) {
+      return latestLocationsCache.data;
+    }
+
     const [rows] = await pool.query(
       `SELECT l.*
        FROM locations l
@@ -26,6 +38,12 @@ const getLatestLocations = async () => {
        ) latest ON latest.latest_id = l.id
        ORDER BY l.bus_id ASC`
     );
+
+    latestLocationsCache = {
+      data: rows,
+      fetchedAt: now,
+    };
+
     return rows;
   } catch (error) {
     console.error('Error fetching latest locations:', error);
@@ -72,6 +90,13 @@ const updateLocation = async (locationData) => {
       'INSERT INTO locations (bus_id, latitude, longitude, speed_kmh, timestamp) VALUES (?, ?, ?, ?, NOW())',
       [bus_id, latitude, longitude, Number.isFinite(Number(speed_kmh)) ? Number(speed_kmh) : 0]
     );
+
+    // Invalidate latest snapshot cache after write.
+    latestLocationsCache = {
+      data: null,
+      fetchedAt: 0,
+    };
+
     return result;
   } catch (error) {
     console.error('Error updating location:', error);
