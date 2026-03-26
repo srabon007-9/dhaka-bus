@@ -1,8 +1,4 @@
-/* App.css - Tailwind CSS configuration and custom styles */
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* App.css - legacy custom styles */
 
 /* Leaflet map styles */
 .leaflet-container {
