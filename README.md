@@ -1,136 +1,46 @@
 # 🚌 Dhaka Bus Service
 
-Real-time bus tracking and ticket booking platform for Dhaka.
-
-Built with React, Node.js/Express, MySQL, and Docker.
+Real-time bus tracking and ticket booking platform for Dhaka. Built with React, Node.js, MySQL, and Docker.
 
 ---
 
-## 🚀 **New Here? 👋**
+## 🚀 Getting Started
 
-**If you forked the repo or this is your first time**, start here:  
-📖 **[FRIEND_GETTING_STARTED.md](./FRIEND_GETTING_STARTED.md)** ← Step-by-step beginner guide
-
-This walks you through:
-- Installing Docker
-- Running the app with one command
-- Testing all features
-- Making your first code change
-- Contributing back
+**First time here?** Start with the [FRIEND_GETTING_STARTED.md](./FRIEND_GETTING_STARTED.md) guide — it walks you through everything step by step.
 
 ---
 
-## 📋 Project Overview
+## What's Inside?
 
-**Dhaka Bus Service** is a comprehensive transportation management platform inspired by Uber, Pathao, and modern airline booking systems. It provides:
+This is a full-stack transportation management platform with:
 
-- **Live Bus Tracking**: Real-time GPS locations of buses on an interactive map
-- **Smart Booking System**: Step-by-step seat selection with availability tracking
-- **Admin Dashboard**: Full CRUD operations for buses, routes, and trip schedules
-- **User Authentication**: JWT-based login/register with role-based access control
-- **Responsive Design**: Works perfectly on desktop, tablet, and mobile devices
-
----
-
-## 🏗️ Architecture & Tech Stack
-
-### Frontend
-- **Framework**: React 18 with Vite (fast build tool)
-- **Styling**: Tailwind CSS with custom animations (Framer Motion)
-- **Map**: Leaflet + OpenStreetMap for real-time bus tracking
-- **State Management**: React Context API (AuthContext for global auth state)
-- **HTTP Client**: Axios for API calls
-- **Build Size**: ~180KB gzipped (production)
-
-### Backend
-- **Runtime**: Node.js
-- **Framework**: Express 5.2.1
-- **Authentication**: JWT (jsonwebtoken ^9.0.2)
-- **Password Hashing**: bcryptjs (10 salt rounds for security)
-- **API Format**: RESTful JSON endpoints
-- **CORS**: Enabled for frontend integration
-
-### Database
-- **System**: MySQL 8.0
-- **Tables**: Core booking + tracking tables with seat-level passenger data and event logs
-- **Relationships**: Foreign keys between trips/buses/routes/users
-- **Indexes**: Performance optimized queries
-
-### DevOps & Deployment
-- **Containerization**: Docker & Docker Compose
-- **Frontend Server**: Nginx (reverse proxy)
-- **Environment**: Isolated MySQL, Node, and Nginx containers
-- **Health Checks**: All services monitored
+- **Live Bus Tracking** — See buses move in real-time on an interactive map
+- **Smart Booking** — Step-by-step seat selection with instant confirmations
+- **Admin Dashboard** — Manage buses, routes, and schedules
+- **User Authentication** — Secure login with role-based access
+- **Mobile-Friendly** — Works great on phones, tablets, and desktops
 
 ---
 
-## 🎯 Core Features (Phase 2 Complete)
+## Tech Stack
 
-### 1. Authentication & Security
-```
-✅ User Registration (name, email, password)
-✅ Login with JWT token generation (7-day expiry)
-✅ Password hashing (bcryptjs)
-✅ Role-based access control (admin vs regular user)
-✅ Protected routes and endpoints
-✅ Session persistence in localStorage
-```
+**Frontend:** React 18 + Vite, Tailwind CSS, Leaflet maps
+**Backend:** Node.js + Express, JWT auth, Socket.IO for live updates
+**Database:** MySQL 8.0 with optimized queries and indexes
+**DevOps:** Docker Compose for local development, Nginx for serving
 
-### 2. Live Bus Tracking
-```
-✅ Real-time map with Leaflet/OpenStreetMap
-✅ Bus location markers with speed/status indicators
-✅ Route visualization (polylines on map)
-✅ Live updates every 6 seconds
-✅ Full-screen interactive map
-✅ Search and filter buses by name/route
-```
+---
 
-### 3. Smart Booking System
-```
-✅ Step-by-step booking flow (4 steps):
-   - Select route
-   - Choose trip (departure time, fare)
-   - Pick seats (visual grid layout)
-   - Confirm booking
-✅ Real-time seat availability checking
-✅ Prevent double-booking with seat conflict detection
-✅ Instant ticket confirmation with ticket ID
-✅ Passenger name field (auto-filled with logged-in user)
-```
+## Core Features
 
-### 4. Ticket Management
-```
-✅ View all user bookings with trip details
-✅ Cancel ticket with ownership/admin verification
-✅ Display booking status (active/cancelled)
-✅ Show route name, departure time, seat numbers
-✅ Display ticket ID and total fare
-✅ Per-seat passenger identity stored and shown in ticket history
-✅ Explicit boarding/alighting event logging for stop-level passenger flow
-```
-
-### 5. Admin Dashboard
-```
-✅ Full CRUD for Buses (Create, Read, Update, Delete)
-✅ Full CRUD for Routes (with coordinates for map)
-✅ Full CRUD for Trips (scheduled departures)
-✅ Edit modal with pre-populated forms
-✅ Data tables with action buttons
-✅ Real-time data sync with backend
-✅ Admin-only access with role verification
-```
-
-### 6. User Interface
-```
-✅ Dark theme with cyan/blue accents
-✅ Responsive navbar with role-aware links
-✅ Hero page with feature cards
-✅ Glass-morphism design (frosted glass effect)
-✅ Smooth page transitions (Framer Motion)
-✅ Toast notifications for user feedback
-✅ Loading skeletons and error states
-```
+- ✅ User registration & JWT authentication
+- ✅ Real-time bus locations on Leaflet maps
+- ✅ 4-step booking flow with seat selection
+- ✅ Instant ticket confirmation
+- ✅ Ticket history and cancellations
+- ✅ Admin CRUD for buses, routes, trips
+- ✅ Dark theme UI with glass-morphism effects
+- ✅ Responsive across all devices
 
 ---
 
@@ -261,59 +171,29 @@ The database is pre-seeded with 2 users:
 
 ---
 
-## 🚀 Quick Start
-
-### Prerequisites
-- Docker & Docker Compose installed
-- Git
-
-### Installation & Running
+## Quick Start
 
 ```bash
-# 1. Clone repository
 git clone https://github.com/srabon007-9/dhaka-bus.git
 cd dhaka-bus
-
-# 2. Start all services (MySQL, Backend, Frontend)
 docker-compose up --build
-
-# 3. Open in browser
-# Frontend:  http://localhost
-# Backend:   http://localhost:3000
-# Database:  localhost:3306
 ```
 
-That's it! The database will auto-initialize with schema and seed data.
+Then open **http://localhost** in your browser. That's it!
 
-### Stopping Services
-```bash
-docker-compose down
-```
+**Demo accounts:**
+- Admin: `admin@dhakabus.com` / `admin123`
+- User: `user@dhakabus.com` / `user123`
 
 ---
 
-## 🛣️ Roadmap (Future Phases)
+## What's Next?
 
-### Phase 3: Real-time Features
-- [ ] WebSocket for live bus tracking (instead of 6s polling)
-- [ ] Real-time notifications for booking confirmations
-- [ ] SMS/Email alerts
-
-### Phase 4: Payment Integration
-- [ ] Stripe/AamarpayPayment gateway
-- [ ] Transaction history
-- [ ] Invoice generation
-
-### Phase 5: Analytics & Reporting
-- [ ] Admin revenue dashboard
-- [ ] Route utilization metrics
-- [ ] Peak hours analysis
-- [ ] User behavior analytics
-
-### Phase 6: Mobile App
-- [ ] React Native mobile version
-- [ ] Push notifications
-- [ ] Offline mode
+- WebSocket for real-time bus updates (instead of polling)
+- Payment integration (Stripe, bKash, Nagad)
+- Admin analytics dashboard
+- Mobile app (React Native)
+- SMS/Email notifications
 
 ---
 

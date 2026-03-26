@@ -1,6 +1,4 @@
-// Database configuration file
-// This connects the Node.js app to MySQL database
-
+// MySQL connection pool
 const mysql = require('mysql2/promise');
 
 const isTruthy = (value) => String(value || '').toLowerCase() === 'true';
@@ -30,10 +28,9 @@ const buildSslConfig = () => {
   };
 };
 
-// Create a connection pool (better than single connection)
-// A pool manages multiple connections efficiently
+// Connection pool for efficient resource management
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'mysql', // In Docker, service name is 'mysql'
+  host: process.env.DB_HOST || 'mysql',
   port: Number(process.env.DB_PORT) || 3306,
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || 'password',
@@ -44,5 +41,4 @@ const pool = mysql.createPool({
   ssl: buildSslConfig(),
 });
 
-// Export the pool so other files can use it
 module.exports = pool;

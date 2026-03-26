@@ -1,6 +1,4 @@
-// Main Express Server File
-// This is the heart of the backend - it sets up the Express app and all routes
-
+// Express server setup
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -33,9 +31,7 @@ const allowedOrigins = [
   process.env.FRONTEND_URL,
 ].filter(Boolean);
 
-// Middleware - these run before routes
-// Body parser - allows us to receive JSON data in request bodies
-// Keep raw webhook payload for Stripe signature verification.
+// Parse JSON, keep raw body for webhooks
 app.use(express.json({
   verify: (req, _res, buf) => {
     if (req.originalUrl === '/api/tickets/payment/webhook') {
@@ -44,12 +40,10 @@ app.use(express.json({
   },
 }));
 
-// CORS - allows frontend to call backend API
-// In Docker, frontend runs on localhost:5173 and backend on localhost:3000
+// Allow frontend requests
 app.use(
   cors({
     origin: (origin, callback) => {
-      // allow curl/postman/same-origin requests with no Origin header
       if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
@@ -71,11 +65,7 @@ const io = new Server(httpServer, {
 
 app.set('io', io);
 
-// ============================================
-// ROUTE-BASED BUS SIMULATION
-// ============================================
-
-// Global variable to hold bus simulator instances
+// Bus simulators
 let busSimulators = {};
 let liveBroadcastInterval = null;
 
@@ -98,15 +88,9 @@ const enrichLocationsWithSimulatorState = (locations) => {
   });
 };
 
-/**
- * Initialize bus simulations for all active buses
- * Runs on server startup
- */
 const initializeBusSimulations = async () => {
   try {
     console.log('\n📡 Initializing Bus Simulations...');
-
-    // Get all active buses
     const buses = await busModel.getAllBuses();
     const activeBuses = buses.filter((bus) => bus.status === 'active');
 
@@ -116,11 +100,9 @@ const initializeBusSimulations = async () => {
     }
 
     const failedBuses = [];
-
-    // Create simulator for each active bus
     for (const bus of activeBuses) {
       try {
-        const simulator = new OSRMBusSimulator(bus.id, 2000); // Update every 2 seconds
+        const simulator = new OSRMBusSimulator(bus.id, 2000);
         await simulator.start();
         busSimulators[bus.id] = simulator;
       } catch (error) {
@@ -129,7 +111,6 @@ const initializeBusSimulations = async () => {
       }
     }
 
-    // Retry failed initializations once (helps with transient OSRM/network failures)
     if (failedBuses.length > 0) {
       console.log(`🔁 Retrying ${failedBuses.length} failed simulator(s)...`);
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -152,9 +133,6 @@ const initializeBusSimulations = async () => {
   }
 };
 
-/**
- * Emit latest locations to all connected Socket.IO clients
- */
 const emitLatestLocations = async () => {
   try {
     const latest = await locationModel.getLatestLocations();
@@ -164,16 +142,11 @@ const emitLatestLocations = async () => {
   }
 };
 
-// Socket.IO connection handler
 io.on('connection', async (socket) => {
   try {
     console.log(`👤 Client connected: ${socket.id}`);
-
-    // Send initial locations snapshot
     const latest = await locationModel.getLatestLocations();
     socket.emit('locations:snapshot', enrichLocationsWithSimulatorState(latest));
-
-    // Cleanup on disconnect
     socket.on('disconnect', () => {
       console.log(`👤 Client disconnected: ${socket.id}`);
     });
@@ -182,7 +155,6 @@ io.on('connection', async (socket) => {
   }
 });
 
-// Health check endpoint - useful to verify backend is running
 app.get('/api/health', (req, res) => {
   res.json({
     success: true,
@@ -192,8 +164,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Mount routes
-// These lines connect our route files to specific URL paths
 app.use('/api/buses', busRoutes);
 app.use('/api/routes', routeRoutes);
 app.use('/api/stops', stopRoutes);
@@ -202,7 +172,6 @@ app.use('/api/auth', authRoutes);
 app.use('/api/trips', tripRoutes);
 app.use('/api/tickets', ticketRoutes);
 
-// Root endpoint
 app.get('/', (req, res) => {
   res.json({
     message: 'Dhaka Bus Tracking API',
@@ -220,7 +189,6 @@ app.get('/', (req, res) => {
   });
 });
 
-// 404 handler - if request doesn't match any route above
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -229,19 +197,11 @@ app.use((req, res) => {
   });
 });
 
-// Start the server
 const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, async () => {
-  console.log(`\n${'='.repeat(50)}`);
-  console.log(`✅ Backend server running on port ${PORT}`);
-  console.log(`📍 API available at http://localhost:${PORT}`);
-  console.log(`🔗 CORS enabled for localhost`);
-  console.log(`${'='.repeat(50)}\n`);
+  console.log(`\n✅ Backend on port ${PORT}\n`);
 
-  // Initialize bus simulations after server starts
   await initializeBusSimulations();
-
-  // Emit one shared live snapshot for all clients every 3 seconds.
   if (!liveBroadcastInterval) {
     liveBroadcastInterval = setInterval(() => {
       emitLatestLocations();
@@ -250,16 +210,9 @@ httpServer.listen(PORT, async () => {
 });
 
 process.on('SIGINT', () => {
-  console.log('\n\n🛑 Shutting down server...');
-
-  if (liveBroadcastInterval) {
-    clearInterval(liveBroadcastInterval);
-  }
-
-  // Stop all bus simulators
-  Object.values(busSimulators).forEach((simulator) => {
-    simulator.stop();
-  });
+  console.log('\n🛑 Shutting down...');
+  if (liveBroadcastInterval) clearInterval(liveBroadcastInterval);
+  Object.values(busSimulators).forEach((sim) => sim.stop());
 
   process.exit(0);
 });

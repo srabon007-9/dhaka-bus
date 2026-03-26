@@ -1,9 +1,5 @@
-// Bus Model - Functions to get/add bus data from database
-
 const pool = require('../config/database');
 
-// Get all buses
-// This queries the 'buses' table and returns all buses
 const getAllBuses = async () => {
   try {
     const [rows] = await pool.query(
@@ -19,7 +15,6 @@ const getAllBuses = async () => {
   }
 };
 
-// Get a single bus by ID
 const getBusById = async (busId) => {
   try {
     const [rows] = await pool.query(
@@ -36,8 +31,6 @@ const getBusById = async (busId) => {
   }
 };
 
-// Get buses by route ID
-// Useful for finding all buses on a specific route
 const getBusesByRouteId = async (routeId) => {
   try {
     const [rows] = await pool.query(
@@ -72,7 +65,6 @@ const getBusesByRoute = async (routeName) => {
   }
 };
 
-// Add a new bus (for testing/admin purposes)
 const addBus = async (busData) => {
   try {
     const { name, route_id, capacity, status } = busData;

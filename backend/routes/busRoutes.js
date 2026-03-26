@@ -6,22 +6,14 @@ const busModel = require('../models/busModel');
 const { verifyToken, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
-
-// GET /api/buses - Get all buses or filter by route
-// Query params: ?route_id=1 (optional - filter by specific route)
-// Examples: 
-//   /api/buses (all buses)
-//   /api/buses?route_id=1 (only buses on route 1)
 router.get('/', async (req, res) => {
   try {
     const { route_id } = req.query;
     
     let buses;
     if (route_id) {
-      // Filter buses by route_id
       buses = await busModel.getBusesByRouteId(route_id);
     } else {
-      // Get all buses
       buses = await busModel.getAllBuses();
     }
     
@@ -41,8 +33,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/buses/route/:name - Get buses by route name
-// Example: /api/buses/route/Gulshan%20to%20Motijheel
 router.get('/route/:name', async (req, res) => {
   try {
     const buses = await busModel.getBusesByRoute(req.params.name);
@@ -60,8 +50,6 @@ router.get('/route/:name', async (req, res) => {
   }
 });
 
-// GET /api/buses/:id - Get a specific bus by ID
-// Example: /api/buses/5
 router.get('/:id', async (req, res) => {
   try {
     const bus = await busModel.getBusById(req.params.id);
@@ -85,8 +73,6 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/buses - Add a new bus
-// Body should contain: { name, route_id, capacity, status }
 router.post('/', verifyToken, requireAdmin, async (req, res) => {
   try {
     const { name, route_id } = req.body;
@@ -112,7 +98,6 @@ router.post('/', verifyToken, requireAdmin, async (req, res) => {
   }
 });
 
-// PUT /api/buses/:id - Update bus
 router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
     const existing = await busModel.getBusById(req.params.id);
@@ -134,7 +119,6 @@ router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
   }
 });
 
-// DELETE /api/buses/:id - Delete bus
 router.delete('/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
     const result = await busModel.deleteBus(req.params.id);
