@@ -10,7 +10,7 @@ import useLiveTracking from '../hooks/useLiveTracking';
 import useToast from '../hooks/useToast';
 import Toast from '../components/common/Toast';
 import { stopApi, ticketApi, tripApi } from '../services/api';
-import { useAuthContext } from '../contexts/AuthContext';
+import { useAuthContext } from '../contexts/AuthContextValue';
 import PageMotion from '../components/common/PageMotion';
 
 const steps = ['Choose Journey', 'Select Bus & Seats', 'Confirm Booking'];
@@ -87,6 +87,11 @@ export default function BookingPage() {
     () => seats.map((seat) => ({ ...seat, booked: bookedSeats.includes(seat.id) })),
     [bookedSeats, seats]
   );
+  const availableRoutes = useMemo(
+    () => routes.filter((item) => (item.stops?.length || 0) >= 2),
+    [routes]
+  );
+  const hiddenIncompleteRouteCount = routes.length - availableRoutes.length;
 
   const totalPrice = (segmentPrice * selectedSeats.length).toFixed(2);
   const selectedSeatLabels = selectedSeats.map((seat) => `S${seat}`).join(', ');
@@ -293,7 +298,7 @@ export default function BookingPage() {
       );
 
       // Manual Payment Mode (shows bKash/Nagad account details)
-      if (checkout?.paymentMethods) {
+      if (Array.isArray(checkout?.paymentMethods) && checkout.paymentMethods.length > 0) {
         setSuccessState({
           isManualPayment: true,
           paymentId: checkout.payment_id,
@@ -370,9 +375,25 @@ export default function BookingPage() {
               {routesLoading && <div className="mt-6"><LoadingSkeleton rows={3} /></div>}
               {routesError && <div className="mt-6"><ErrorCard title="Could not load routes" description={routesError} onRetry={retry} /></div>}
 
-              {!routesLoading && !routesError && (
+              {!routesLoading && !routesError && hiddenIncompleteRouteCount > 0 && (
+                <div className="mt-6 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                  {hiddenIncompleteRouteCount} route{hiddenIncompleteRouteCount === 1 ? '' : 's'} hidden from booking because stop setup is incomplete.
+                </div>
+              )}
+
+              {!routesLoading && !routesError && availableRoutes.length === 0 && (
+                <div className="mt-6">
+                  <EmptyState
+                    title="No bookable routes available"
+                    description="Routes need at least two configured stops before riders can book them."
+                    icon="🧭"
+                  />
+                </div>
+              )}
+
+              {!routesLoading && !routesError && availableRoutes.length > 0 && (
                 <div className="mt-6 grid gap-3 lg:grid-cols-2">
-                  {routes.map((item) => (
+                  {availableRoutes.map((item) => (
                     <button
                       key={item.id}
                       type="button"

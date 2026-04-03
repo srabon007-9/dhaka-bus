@@ -16,7 +16,34 @@ const authConfig = (token) => ({
   },
 });
 
-const normalize = (response) => response?.data?.data ?? response?.data ?? [];
+const sanitizeText = (value) => {
+  if (typeof value !== 'string') return value;
+
+  return value
+    .replace(
+      /Dhanmondi(?:\s|[^A-Za-z0-9])*(?:to\s*)?Airport Express/gi,
+      'Dhanmondi to Airport Express'
+    )
+    .replace(/Dhanmondiâ€“Airport Express/g, 'Dhanmondi to Airport Express')
+    .replace(/Dhanmondi–Airport Express/g, 'Dhanmondi to Airport Express')
+    .replace(/Dhanmondi-Airport Express/g, 'Dhanmondi to Airport Express');
+};
+
+const sanitizeData = (value) => {
+  if (Array.isArray(value)) {
+    return value.map(sanitizeData);
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nestedValue]) => [key, sanitizeData(nestedValue)])
+    );
+  }
+
+  return sanitizeText(value);
+};
+
+const normalize = (response) => sanitizeData(response?.data?.data ?? response?.data ?? []);
 
 export const busApi = {
   list: async () => normalize(await api.get('/buses')),
@@ -26,7 +53,11 @@ export const busApi = {
 };
 
 export const routeApi = {
-  list: async () => normalize(await api.get('/routes')),
+  list: async (options = {}) => normalize(
+    await api.get('/routes', {
+      params: options.includeIncomplete ? { includeIncomplete: 'true' } : undefined,
+    })
+  ),
   create: async (payload, token) => normalize(await api.post('/routes', payload, authConfig(token))),
   update: async (id, payload, token) => normalize(await api.put(`/routes/${id}`, payload, authConfig(token))),
   remove: async (id, token) => normalize(await api.delete(`/routes/${id}`, authConfig(token))),

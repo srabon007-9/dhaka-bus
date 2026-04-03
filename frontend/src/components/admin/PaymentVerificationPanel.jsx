@@ -1,18 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ticketApi } from '../../services/api';
-import { useAuthContext } from '../../contexts/AuthContext';
+import { useAuthContext } from '../../contexts/AuthContextValue';
 import useToast from '../../hooks/useToast';
 import LoadingSkeleton from '../common/LoadingSkeleton';
 import Modal from '../common/Modal';
-import Button from '../common/Button';
+import Toast from '../common/Toast';
 
 export default function PaymentVerificationPanel() {
   const { token } = useAuthContext();
-  const { error: showError, success: showSuccess } = useToast();
+  const toast = useToast();
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalAction, setModalAction] = useState('verify');
   const [notes, setNotes] = useState('');
   const [verifying, setVerifying] = useState(false);
 
@@ -30,14 +31,14 @@ export default function PaymentVerificationPanel() {
       const data = await ticketApi.getPendingPayments(token);
       setPayments(Array.isArray(data) ? data : []);
     } catch (error) {
-      showError('Failed to load pending payments');
+      toast.error('Failed to load pending payments');
       console.error(error);
     } finally {
       if (showLoading) {
         setLoading(false);
       }
     }
-  }, [token, showError]);
+  }, [token, toast]);
 
   useEffect(() => {
     fetchPendingPayments({ showLoading: true });
@@ -46,15 +47,24 @@ export default function PaymentVerificationPanel() {
     return () => clearInterval(interval);
   }, [fetchPendingPayments]);
 
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setSelectedPayment(null);
+    setNotes('');
+    setModalAction('verify');
+  };
+
   const handleVerify = (payment) => {
     setSelectedPayment(payment);
     setNotes('');
+    setModalAction('verify');
     setIsModalOpen(true);
   };
 
   const handleReject = (payment) => {
     setSelectedPayment(payment);
     setNotes('');
+    setModalAction('reject');
     setIsModalOpen(true);
   };
 
@@ -65,13 +75,11 @@ export default function PaymentVerificationPanel() {
     try {
 
       await ticketApi.verifyPayment(selectedPayment.payment_id, notes, token);
-      showSuccess('Payment verified successfully!');
-      setIsModalOpen(false);
-      setSelectedPayment(null);
-      setNotes('');
+      toast.success('Payment confirmed, ticket issued, and email sent to user.');
+      closeModal();
       fetchPendingPayments();
     } catch (error) {
-      showError(`Verification failed: ${error.message}`);
+      toast.error(error?.response?.data?.message || error.message || 'Payment confirmation failed');
     } finally {
       setVerifying(false);
     }
@@ -84,13 +92,11 @@ export default function PaymentVerificationPanel() {
     try {
 
       await ticketApi.rejectPayment(selectedPayment.payment_id, notes, token);
-      showSuccess('Payment rejected successfully!');
-      setIsModalOpen(false);
-      setSelectedPayment(null);
-      setNotes('');
+      toast.success('Payment rejected successfully!');
+      closeModal();
       fetchPendingPayments();
     } catch (error) {
-      showError(`Rejection failed: ${error.message}`);
+      toast.error(error?.response?.data?.message || error.message || 'Payment rejection failed');
     } finally {
       setVerifying(false);
     }
@@ -102,8 +108,11 @@ export default function PaymentVerificationPanel() {
 
   if (payments.length === 0) {
     return (
-      <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-        <p className="text-gray-500">No pending payments to verify</p>
+      <div className="text-center py-12 bg-white rounded-lg border border-gray-200 space-y-2">
+        <p className="text-gray-700 font-medium">No pending payments to verify</p>
+        <p className="text-sm text-gray-500 px-6">
+          The Confirm Payment button appears only when a user starts manual checkout and submits a pending payment request.
+        </p>
       </div>
     );
   }
@@ -121,7 +130,6 @@ export default function PaymentVerificationPanel() {
                 <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Method</th>
                 <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Status</th>
                 <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Requested</th>
-                <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -144,21 +152,23 @@ export default function PaymentVerificationPanel() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600">
-                    {new Date(payment.created_at).toLocaleDateString()} {new Date(payment.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </td>
-                  <td className="px-6 py-4 text-sm space-x-2 flex">
-                    <button
-                      onClick={() => handleVerify(payment)}
-                      className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-medium"
-                    >
-                      Verify
-                    </button>
-                    <button
-                      onClick={() => handleReject(payment)}
-                      className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium"
-                    >
-                      Reject
-                    </button>
+                    <div>
+                      {new Date(payment.created_at).toLocaleDateString()} {new Date(payment.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        onClick={() => handleVerify(payment)}
+                        className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-medium"
+                      >
+                        Confirm Payment
+                      </button>
+                      <button
+                        onClick={() => handleReject(payment)}
+                        className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium"
+                      >
+                        Reject
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -169,50 +179,59 @@ export default function PaymentVerificationPanel() {
 
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={`${selectedPayment?.status === 'pending' && notes === '' ? 'Verify' : 'Add Notes for'} Payment`}
+        onClose={closeModal}
+        title={modalAction === 'verify' ? 'Confirm Ticket Payment' : 'Reject Ticket Payment'}
       >
         <div className="space-y-4">
           {selectedPayment && (
-            <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-              <p className="text-sm"><span className="font-medium">Payment ID:</span> {selectedPayment.payment_id}</p>
-              <p className="text-sm"><span className="font-medium">User:</span> {selectedPayment.user_email}</p>
-              <p className="text-sm"><span className="font-medium">Amount:</span> {selectedPayment.amount} {selectedPayment.currency?.toUpperCase()}</p>
-              <p className="text-sm"><span className="font-medium">Method:</span> {selectedPayment.payment_method}</p>
-              <p className="text-sm"><span className="font-medium">Status:</span> {selectedPayment.status}</p>
+            <div className="bg-white p-4 rounded-lg space-y-2 text-black">
+              <p className="text-sm text-black"><span className="font-medium text-black">Payment ID:</span> {selectedPayment.payment_id}</p>
+              <p className="text-sm text-black"><span className="font-medium text-black">User:</span> {selectedPayment.user_email}</p>
+              <p className="text-sm text-black"><span className="font-medium text-black">Amount:</span> {selectedPayment.amount} {selectedPayment.currency?.toUpperCase()}</p>
+              <p className="text-sm text-black"><span className="font-medium text-black">Method:</span> {selectedPayment.payment_method}</p>
+              <p className="text-sm text-black"><span className="font-medium text-black">Status:</span> {selectedPayment.status}</p>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Notes (e.g., bKash reference, confirmation details)
+            <label className="block text-sm font-medium text-slate-200 mb-2">
+              {modalAction === 'verify'
+                ? 'Confirmation Notes (e.g., bKash/Nagad transaction reference)'
+                : 'Rejection Reason (optional)'}
             </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Enter payment confirmation notes..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder={
+                modalAction === 'verify'
+                  ? 'Enter payment confirmation notes...'
+                  : 'Enter reason for rejection...'
+              }
+              className="w-full px-3 py-2 border border-white/30 rounded-lg bg-slate-950 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
               rows="4"
             />
           </div>
 
           <div className="flex gap-2 pt-4">
+            {modalAction === 'verify' ? (
+              <button
+                onClick={confirmVerify}
+                disabled={verifying}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium"
+              >
+                {verifying ? 'Confirming...' : 'Confirm Payment'}
+              </button>
+            ) : (
+              <button
+                onClick={confirmReject}
+                disabled={verifying}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 font-medium"
+              >
+                {verifying ? 'Rejecting...' : 'Reject Payment'}
+              </button>
+            )}
             <button
-              onClick={confirmVerify}
-              disabled={verifying}
-              className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium"
-            >
-              {verifying ? 'Verifying...' : 'Verify Payment'}
-            </button>
-            <button
-              onClick={confirmReject}
-              disabled={verifying}
-              className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 font-medium"
-            >
-              {verifying ? 'Rejecting...' : 'Reject Payment'}
-            </button>
-            <button
-              onClick={() => setIsModalOpen(false)}
+              onClick={closeModal}
               disabled={verifying}
               className="flex-1 px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 disabled:opacity-50 font-medium"
             >
@@ -221,6 +240,7 @@ export default function PaymentVerificationPanel() {
           </div>
         </div>
       </Modal>
+      <Toast toasts={toast.toasts} removeToast={toast.removeToast} />
     </div>
   );
 }

@@ -128,8 +128,7 @@ function RouteDirectionDecorator({ positions }) {
   return null;
 }
 
-export default function MapView({ routes = [], buses = [], busLocations = new Map(), selectedBus, stops = [] }) {
-  const [osrmRoute, setOsrmRoute] = useState(null);
+export default function MapView({ buses = [], busLocations = new Map(), selectedBus, stops = [] }) {
   const [routeGeometry, setRouteGeometry] = useState([]);
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [routeError, setRouteError] = useState(null);
@@ -169,7 +168,6 @@ export default function MapView({ routes = [], buses = [], busLocations = new Ma
       setRouteError(null);
       try {
         const osrmResponse = await fetchOSRMRoute(waypoints);
-        setOsrmRoute(osrmResponse);
         const geometry = extractRouteGeometry(osrmResponse);
         setRouteGeometry(geometry);
         if (routeCacheKey) {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import PageMotion from '../components/common/PageMotion';
-import { useAuthContext } from '../contexts/AuthContext';
+import { useAuthContext } from '../contexts/AuthContextValue';
 
 const initialForm = {
   name: '',

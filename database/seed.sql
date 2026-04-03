@@ -38,7 +38,7 @@ INSERT INTO users (name, email, password_hash, role, email_verified_at, verifica
 -- ROUTES - Single Route: Dhanmondi-Airport Express
 -- ==========================================
 INSERT INTO routes (route_name, start_point, end_point) VALUES
-('Dhanmondi–Airport Express', 'Dhanmondi 27', 'Hazrat Shahjalal International Airport'),
+('Dhanmondi-Airport Express', 'Dhanmondi 27', 'Hazrat Shahjalal International Airport'),
 ('Airport to Dhanmondi 27', 'Airport', 'Dhanmondi 27');
 
 -- ==========================================

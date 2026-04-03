@@ -95,6 +95,107 @@ const parseStoredBookingPayload = (value) => {
   return value;
 };
 
+const parseStoredPaymentDetails = (value) => {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  return value;
+};
+
+const normalizeSeatList = (value) => {
+  const source = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? (() => {
+          try {
+            return JSON.parse(value);
+          } catch {
+            return [];
+          }
+        })()
+      : [];
+
+  return source
+    .map((seat) => Number(seat))
+    .filter((seat) => Number.isInteger(seat) && seat > 0)
+    .sort((left, right) => left - right);
+};
+
+const seatListsMatch = (left, right) => {
+  const normalizedLeft = normalizeSeatList(left);
+  const normalizedRight = normalizeSeatList(right);
+
+  return normalizedLeft.length === normalizedRight.length
+    && normalizedLeft.every((seat, index) => seat === normalizedRight[index]);
+};
+
+const findTicketForManualPayment = async ({ payment, fallbackUserId }) => {
+  const paymentDetails = parseStoredPaymentDetails(payment.payment_details);
+  const completedTicketId = Number(paymentDetails?.ticket_id);
+  if (completedTicketId) {
+    return ticketModel.getTicketById(completedTicketId);
+  }
+
+  const bookingPayload = parseStoredBookingPayload(payment.booking_payload);
+  if (!bookingPayload) {
+    return null;
+  }
+
+  const userId = Number(payment.user_id || bookingPayload.user_id || fallbackUserId);
+  if (!userId) {
+    return null;
+  }
+
+  const tickets = await ticketModel.getTicketsByUserId(userId);
+  return tickets.find((ticket) => (
+    Number(ticket.trip_id) === Number(bookingPayload.trip_id)
+    && Number(ticket.boarding_stop_id) === Number(bookingPayload.boarding_stop_id)
+    && Number(ticket.dropoff_stop_id) === Number(bookingPayload.dropoff_stop_id)
+    && seatListsMatch(ticket.seat_numbers, bookingPayload.seat_numbers)
+  )) || null;
+};
+
+const finalizeManualPaymentTicket = async ({ payment, paymentId, userForEmail }) => {
+  const bookingPayload = parseStoredBookingPayload(payment.booking_payload);
+  if (!bookingPayload) {
+    const error = new Error('Stored booking payload is invalid');
+    error.statusCode = 500;
+    throw error;
+  }
+
+  const ticket = await ticketModel.reserveTicket(bookingPayload);
+  await manualPaymentModel.markPaymentCompleted(paymentId, { ticket_id: ticket.id });
+
+  const savedTicket = await ticketModel.getTicketById(ticket.id);
+  const builtTicket = buildTicketResponse(savedTicket || ticket);
+
+  let emailSent = false;
+  if (userForEmail?.email) {
+    try {
+      await sendPaymentConfirmationEmail({
+        email: userForEmail.email,
+        name: userForEmail.name || 'Passenger',
+        ticket: builtTicket,
+        amount: payment.amount,
+        paymentId,
+      });
+      emailSent = true;
+    } catch (emailError) {
+      console.error('Failed to send confirmation email:', emailError.message);
+    }
+  }
+
+  return {
+    ticket: builtTicket,
+    emailSent,
+  };
+};
+
 const finalizePaidSession = async ({ paymentRefId, enforceUserId }) => {
   const nagadPayment = await nagadPaymentModel.getPaymentByRefId(paymentRefId);
   if (!nagadPayment) {
@@ -223,6 +324,13 @@ router.post('/payment/checkout', verifyToken, async (req, res) => {
             instruction: `Send ${quote.total_price} BDT to ${NAGAD_PERSONAL_NAME} (${NAGAD_PERSONAL_NUMBER}) via Nagad. Reference: ${paymentId}`,
           });
         }
+      }
+
+      if (paymentMethods.length === 0) {
+        return res.status(503).json({
+          success: false,
+          message: 'Manual payment is enabled, but no payment instructions are configured on the server',
+        });
       }
 
       return res.status(201).json({
@@ -610,42 +718,34 @@ router.post('/payment/manual/complete', verifyToken, async (req, res) => {
     }
 
     if (payment.status === 'verified') {
-      // Admin already verified, create ticket now
-      const bookingPayload = payment.booking_payload;
-      const ticket = await ticketModel.reserveTicket(bookingPayload);
-      await manualPaymentModel.markPaymentCompleted(payment_id);
-
-      const savedTicket = await ticketModel.getTicketById(ticket.id);
-      const builtTicket = buildTicketResponse(savedTicket);
-
-      // Send confirmation email with ticket details
-      try {
-        await sendPaymentConfirmationEmail({
-          email: req.user.email,
-          name: req.user.name,
-          ticket: builtTicket,
-          amount: payment.amount,
-          paymentId: payment_id,
-        });
-      } catch (emailError) {
-        console.error('Failed to send confirmation email:', emailError.message);
-        // Don't fail the booking if email fails
-      }
+      const finalized = await finalizeManualPaymentTicket({
+        payment,
+        paymentId: payment_id,
+        userForEmail: req.user,
+      });
 
       return res.status(201).json({
         success: true,
-        message: 'Payment verified and ticket created!',
-        data: { ticket: builtTicket },
+        message: finalized.emailSent
+          ? 'Payment verified and ticket created. Confirmation email sent!'
+          : 'Payment verified and ticket created!',
+        data: {
+          ticket: finalized.ticket,
+          email_sent: finalized.emailSent,
+        },
       });
     }
 
     if (payment.status === 'completed') {
-      const tickets = await ticketModel.getTicketsByUserId(req.user.id);
-      const latestTicket = tickets[0];
+      const completedTicket = await findTicketForManualPayment({
+        payment,
+        fallbackUserId: req.user.id,
+      });
+
       return res.status(200).json({
         success: true,
         message: 'Ticket already created',
-        data: { ticket: latestTicket ? buildTicketResponse(latestTicket) : null },
+        data: { ticket: completedTicket ? buildTicketResponse(completedTicket) : null },
       });
     }
 
@@ -750,17 +850,54 @@ router.post('/admin/payments/:paymentId/verify', verifyToken, async (req, res) =
       return res.status(404).json({ success: false, message: 'Payment not found' });
     }
 
-    const verified = await manualPaymentModel.verifyPayment(paymentId, user.id, notes || '');
-    if (!verified) {
-      return res.status(400).json({ success: false, message: 'Could not verify payment' });
+    if (payment.status === 'completed') {
+      return res.status(200).json({
+        success: true,
+        message: 'Payment already confirmed and ticket already issued.',
+        data: { payment_id: paymentId, already_completed: true },
+      });
     }
+
+    if (payment.status === 'rejected' || payment.status === 'cancelled') {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot verify a ${payment.status} payment`,
+      });
+    }
+
+    if (payment.status === 'pending') {
+      const verified = await manualPaymentModel.verifyPayment(paymentId, user.id, notes || '');
+      if (!verified) {
+        return res.status(400).json({ success: false, message: 'Could not verify payment' });
+      }
+    }
+
+    const ticketUser = await userModel.getUserById(payment.user_id);
+    if (!ticketUser) {
+      return res.status(404).json({ success: false, message: 'Ticket owner user not found' });
+    }
+
+    const finalized = await finalizeManualPaymentTicket({
+      payment,
+      paymentId,
+      userForEmail: ticketUser,
+    });
 
     return res.json({
       success: true,
-      message: `Payment verified. User can now complete booking.`,
-      data: { payment_id: paymentId },
+      message: finalized.emailSent
+        ? 'Payment verified, ticket created, and confirmation email sent to user.'
+        : 'Payment verified and ticket created. Email was not sent (SMTP may be unavailable).',
+      data: {
+        payment_id: paymentId,
+        ticket: finalized.ticket,
+        email_sent: finalized.emailSent,
+      },
     });
   } catch (error) {
+    if (error instanceof ticketModel.TicketValidationError) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -783,6 +920,18 @@ router.post('/admin/payments/:paymentId/reject', verifyToken, async (req, res) =
       return res.status(404).json({ success: false, message: 'Payment not found' });
     }
 
+    if (payment.status === 'completed') {
+      return res.status(400).json({ success: false, message: 'Completed payments cannot be rejected' });
+    }
+
+    if (payment.status === 'rejected') {
+      return res.status(400).json({ success: false, message: 'Payment already rejected' });
+    }
+
+    if (payment.status === 'cancelled') {
+      return res.status(400).json({ success: false, message: 'Cancelled payments cannot be rejected' });
+    }
+
     const rejected = await manualPaymentModel.rejectPayment(paymentId, user.id, reason || '');
     if (!rejected) {
       return res.status(400).json({ success: false, message: 'Could not reject payment' });
@@ -797,9 +946,5 @@ router.post('/admin/payments/:paymentId/reject', verifyToken, async (req, res) =
     return res.status(500).json({ success: false, message: error.message });
   }
 });
-
-// Initialize payment models on startup
-nagadPaymentModel.init().catch(console.error);
-manualPaymentModel.init().catch(console.error);
 
 module.exports = router;

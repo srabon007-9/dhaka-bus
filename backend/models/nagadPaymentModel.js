@@ -1,37 +1,8 @@
 const db = require('../config/database');
 const crypto = require('crypto');
+const { rethrowIfMissingTable } = require('./tableDependencyError');
 
 class NagadPaymentModel {
-  /**
-   * Initialize nagad_payments table if it doesn't exist
-   */
-  static async init() {
-    const sql = `
-      CREATE TABLE IF NOT EXISTS nagad_payments (
-        id INT PRIMARY KEY AUTO_INCREMENT,
-        payment_ref_id VARCHAR(50) UNIQUE NOT NULL,
-        merchant_id VARCHAR(100) NOT NULL,
-        amount DECIMAL(10, 2) NOT NULL,
-        currency VARCHAR(3) DEFAULT 'bdt',
-        booking_payload JSON NOT NULL,
-        user_id INT,
-        status ENUM('pending', 'completed', 'failed', 'cancelled') DEFAULT 'pending',
-        payment_details JSON,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        completed_at TIMESTAMP NULL,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-      );
-    `;
-    try {
-      await db.query(sql);
-      console.log('✅ Nagad payments table ready');
-    } catch (error) {
-      if (!error.message.includes('already exists')) {
-        console.error('Error initializing nagad_payments table:', error.message);
-      }
-    }
-  }
-
   /**
    * Create a pending Nagad payment record
    */
@@ -62,7 +33,7 @@ class NagadPaymentModel {
       return result.insertId;
     } catch (error) {
       console.error('Error creating Nagad payment:', error.message);
-      throw error;
+      rethrowIfMissingTable(error, 'nagad_payments');
     }
   }
 
@@ -89,7 +60,7 @@ class NagadPaymentModel {
       };
     } catch (error) {
       console.error('Error retrieving Nagad payment:', error.message);
-      throw error;
+      rethrowIfMissingTable(error, 'nagad_payments');
     }
   }
 
@@ -111,7 +82,7 @@ class NagadPaymentModel {
       return result.affectedRows > 0;
     } catch (error) {
       console.error('Error marking Nagad payment completed:', error.message);
-      throw error;
+      rethrowIfMissingTable(error, 'nagad_payments');
     }
   }
 
@@ -133,7 +104,7 @@ class NagadPaymentModel {
       return result.affectedRows > 0;
     } catch (error) {
       console.error('Error marking Nagad payment failed:', error.message);
-      throw error;
+      rethrowIfMissingTable(error, 'nagad_payments');
     }
   }
 
@@ -152,7 +123,7 @@ class NagadPaymentModel {
       return result.affectedRows > 0;
     } catch (error) {
       console.error('Error marking Nagad payment cancelled:', error.message);
-      throw error;
+      rethrowIfMissingTable(error, 'nagad_payments');
     }
   }
 
