@@ -1,96 +1,74 @@
 # Setup Guide
 
-This is super simple — just Docker and a few steps.
+This guide is for local setup on Windows, macOS, or Linux.
 
-## What You Need
+## Requirements
 
-1. **Docker Desktop** (https://www.docker.com/products/docker-desktop) — handles everything, no need to install Node or MySQL separately
-2. **Git** (https://git-scm.com/)
+- Docker Desktop (Windows/macOS) or Docker Engine + Compose plugin (Linux)
+- Git
 
-## Get the Code
+## 1. Clone the project
 
-**Option 1: Just want to test?**
 ```bash
 git clone https://github.com/srabon007-9/dhaka-bus.git
 cd dhaka-bus
 ```
 
-**Option 2: Want to contribute?**
-1. Fork the repo on GitHub
-2. Clone your fork:
+## 2. Start all services
+
 ```bash
-git clone https://github.com/YOUR-USERNAME/dhaka-bus.git
-cd dhaka-bus
+docker compose up --build
 ```
 
-Forking lets you push changes to your own copy and submit pull requests.
+On first run it can take a few minutes.
 
-## Run It
+## 3. Open the app
+
+- Frontend: http://localhost
+- Backend: http://localhost:3000
+- Health endpoint: http://localhost:3000/api/health
+- phpMyAdmin: http://localhost:8080
+
+Demo users:
+- Admin: admin@dhakabus.com / admin123
+- User: user@dhakabus.com / user123
+
+## Useful commands
 
 ```bash
-docker-compose up --build
+# show containers
+docker compose ps
+
+# show logs
+docker compose logs -f
+
+# stop containers
+docker compose down
+
+# stop and remove DB data (fresh start)
+docker compose down -v
 ```
 
-Wait a minute or two on first run. You'll see:
-- **Frontend:** http://localhost
-- **Backend:** http://localhost:3000
-- **Health check:** http://localhost:3000/api/health
+## Database notes
 
-**Demo accounts:**
-- Admin: `admin@dhakabus.com` / `admin123`
-- User: `user@dhakabus.com` / `user123`
+- On a fresh database volume, schema and seed run automatically from `database/schema.sql` and `database/seed.sql`.
+- Migration files are in `database/migrations`.
+- Production migration helper is `scripts/apply_migrations.sh`.
 
-## Useful Commands
+## If something does not start
+
+1. Run `docker compose down`.
+2. Run `docker compose up --build` again.
+3. If ports are busy, free these ports: `80`, `3000`, `3306`, `8080`.
+
+## Contribution flow
 
 ```bash
-# Check if services are running
-docker-compose ps
-
-# View logs
-docker-compose logs -f
-
-# Stop everything
-docker-compose down
-
-# Rebuild after code changes
-docker-compose up --build
-```
-
-## Troubleshooting
-
-**Services crashed?**
-```bash
-docker-compose down && docker-compose up --build
-```
-
-**Port conflict?** Something else is using port 80, 3000, or 3306. Kill it first.
-
-**Email verification not working?** 
-You need to set up SMTP. Create a `.env` file and add:
-```bash
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@example.com
-SMTP_PASS=your-app-password
-SMTP_SECURE=false
-MAIL_FROM=Dhaka Bus <your-email@example.com>
-```
-Then restart Docker. Without SMTP, verification links show on-screen instead.
-
-## Contributing
-
-**Make a branch:**
-```bash
-git checkout -b feature/your-idea
-```
-
-Branch names: `feature/...`, `bugfix/...`, `docs/...`
-
-**Make your changes, test with Docker, then commit:**
-```bash
+git checkout -b feature/your-change
+# edit code
 git add .
-git commit -m "feat: what you changed"
-git push origin feature/your-idea
+git commit -m "feat: short message"
+git push origin feature/your-change
 ```
 
-Then open a PR on GitHub. Keep commits tidy and describe what you did.
+Then open a pull request.

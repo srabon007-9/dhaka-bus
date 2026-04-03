@@ -1,41 +1,8 @@
 const db = require('../config/database');
 const crypto = require('crypto');
+const { rethrowIfMissingTable } = require('./tableDependencyError');
 
 class ManualPaymentModel {
-  /**
-   * Initialize manual_payments table if it doesn't exist
-   */
-  static async init() {
-    const sql = `
-      CREATE TABLE IF NOT EXISTS manual_payments (
-        id INT PRIMARY KEY AUTO_INCREMENT,
-        payment_id VARCHAR(50) UNIQUE NOT NULL,
-        user_id INT,
-        amount DECIMAL(10, 2) NOT NULL,
-        currency VARCHAR(3) DEFAULT 'bdt',
-        payment_method ENUM('bkash', 'nagad', 'both') NOT NULL,
-        booking_payload JSON NOT NULL,
-        status ENUM('pending', 'verified', 'completed', 'rejected', 'cancelled') DEFAULT 'pending',
-        payment_details JSON,
-        verified_by INT,
-        verified_at TIMESTAMP NULL,
-        notes TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        expires_at TIMESTAMP DEFAULT (DATE_ADD(NOW(), INTERVAL 30 MINUTE)),
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
-        FOREIGN KEY (verified_by) REFERENCES users(id) ON DELETE SET NULL
-      );
-    `;
-    try {
-      await db.query(sql);
-      console.log('✅ Manual payments table ready');
-    } catch (error) {
-      if (!error.message.includes('already exists')) {
-        console.error('Error initializing manual_payments table:', error.message);
-      }
-    }
-  }
-
   /**
    * Create a pending manual payment record
    */
@@ -66,7 +33,7 @@ class ManualPaymentModel {
       return paymentId;
     } catch (error) {
       console.error('Error creating manual payment:', error.message);
-      throw error;
+      rethrowIfMissingTable(error, 'manual_payments');
     }
   }
 
@@ -93,7 +60,7 @@ class ManualPaymentModel {
       };
     } catch (error) {
       console.error('Error retrieving manual payment:', error.message);
-      throw error;
+      rethrowIfMissingTable(error, 'manual_payments');
     }
   }
 
@@ -118,7 +85,7 @@ class ManualPaymentModel {
       }));
     } catch (error) {
       console.error('Error retrieving pending payments:', error.message);
-      throw error;
+      rethrowIfMissingTable(error, 'manual_payments');
     }
   }
 
@@ -146,7 +113,7 @@ class ManualPaymentModel {
       return rows;
     } catch (error) {
       console.error('Error retrieving all pending payments:', error.message);
-      throw error;
+      rethrowIfMissingTable(error, 'manual_payments');
     }
   }
 
@@ -165,26 +132,27 @@ class ManualPaymentModel {
       return result.affectedRows > 0;
     } catch (error) {
       console.error('Error verifying payment:', error.message);
-      throw error;
+      rethrowIfMissingTable(error, 'manual_payments');
     }
   }
 
   /**
    * Mark payment as completed (after ticket creation)
    */
-  static async markPaymentCompleted(paymentId) {
+  static async markPaymentCompleted(paymentId, paymentDetails = null) {
     const sql = `
       UPDATE manual_payments 
-      SET status = 'completed'
+      SET status = 'completed', payment_details = ?
       WHERE payment_id = ?
     `;
 
     try {
-      const [result] = await db.query(sql, [paymentId]);
+      const serializedPaymentDetails = paymentDetails ? JSON.stringify(paymentDetails) : null;
+      const [result] = await db.query(sql, [serializedPaymentDetails, paymentId]);
       return result.affectedRows > 0;
     } catch (error) {
       console.error('Error marking payment completed:', error.message);
-      throw error;
+      rethrowIfMissingTable(error, 'manual_payments');
     }
   }
 
@@ -203,7 +171,7 @@ class ManualPaymentModel {
       return result.affectedRows > 0;
     } catch (error) {
       console.error('Error rejecting payment:', error.message);
-      throw error;
+      rethrowIfMissingTable(error, 'manual_payments');
     }
   }
 
@@ -225,7 +193,7 @@ class ManualPaymentModel {
       return result.affectedRows;
     } catch (error) {
       console.error('Error cancelling expired payments:', error.message);
-      throw error;
+      rethrowIfMissingTable(error, 'manual_payments');
     }
   }
 

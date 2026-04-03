@@ -134,6 +134,26 @@ services:
     networks:
       - dhaka-network
 
+  # ==========================================
+  # PHPMYADMIN (Admin UI for MySQL)
+  # ==========================================
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: dhaka-bus-phpmyadmin
+    restart: unless-stopped
+    # Use platform emulation on Apple Silicon if necessary
+    platform: linux/amd64
+    environment:
+      PMA_HOST: mysql
+      PMA_USER: root
+      PMA_PASSWORD: password
+    ports:
+      - "8080:80"
+    depends_on:
+      - mysql
+    networks:
+      - dhaka-network
+
 # ==========================================
 # VOLUMES
 # ==========================================

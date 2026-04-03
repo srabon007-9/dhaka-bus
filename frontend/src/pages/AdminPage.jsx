@@ -8,12 +8,12 @@ import useLiveTracking from '../hooks/useLiveTracking';
 import { busApi, routeApi, tripApi } from '../services/api';
 import useToast from '../hooks/useToast';
 import Toast from '../components/common/Toast';
-import { useAuthContext } from '../contexts/AuthContext';
+import { useAuthContext } from '../contexts/AuthContextValue';
 import PageMotion from '../components/common/PageMotion';
 
 export default function AdminPage() {
   const { token } = useAuthContext();
-  const { buses, routes, retry } = useLiveTracking();
+  const { buses, routes, retry } = useLiveTracking({ includeIncompleteRoutes: true });
   const [trips, setTrips] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);

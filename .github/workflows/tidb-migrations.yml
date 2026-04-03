@@ -1,0 +1,40 @@
+name: Apply TiDB Migrations
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - 'database/migrations/**'
+      - 'scripts/apply_migrations.sh'
+      - '.github/workflows/tidb-migrations.yml'
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install MySQL client
+        run: sudo apt-get update && sudo apt-get install -y mysql-client
+
+      - name: Write TiDB CA certificate
+        if: ${{ secrets.TIDB_CA_BASE64 != '' }}
+        run: |
+          echo "${{ secrets.TIDB_CA_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/tidb-ca.pem"
+          chmod 600 "$RUNNER_TEMP/tidb-ca.pem"
+
+      - name: Apply migrations
+        env:
+          DB_HOST: ${{ secrets.TIDB_HOST }}
+          DB_PORT: ${{ secrets.TIDB_PORT }}
+          DB_USER: ${{ secrets.TIDB_USER }}
+          DB_PASSWORD: ${{ secrets.TIDB_PASSWORD }}
+          DB_NAME: ${{ secrets.TIDB_DATABASE }}
+          DB_SSL_MODE: ${{ secrets.TIDB_SSL_MODE }}
+          DB_SSL_CA_PATH: ${{ secrets.TIDB_CA_BASE64 != '' && format('{0}/tidb-ca.pem', runner.temp) || '' }}
+        run: bash scripts/apply_migrations.sh

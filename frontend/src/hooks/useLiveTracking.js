@@ -1,23 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { busApi, locationApi, routeApi } from '../services/api';
 import { io } from 'socket.io-client';
 
 const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/api$/, '');
 
-export default function useLiveTracking() {
+export default function useLiveTracking(options = {}) {
   const [buses, setBuses] = useState([]);
   const [routes, setRoutes] = useState([]);
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const fetchAll = async () => {
+  const fetchAll = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const [busData, routeData, locationData] = await Promise.all([
         busApi.list(),
-        routeApi.list(),
+        routeApi.list({ includeIncomplete: Boolean(options.includeIncompleteRoutes) }),
         locationApi.list(),
       ]);
       setBuses(busData);
@@ -28,7 +28,7 @@ export default function useLiveTracking() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [options.includeIncompleteRoutes]);
 
   const refreshLocations = async () => {
     try {
@@ -95,7 +95,7 @@ export default function useLiveTracking() {
       stopFallbackPolling();
       socket.disconnect();
     };
-  }, []);
+  }, [fetchAll]);
 
   const busLocations = useMemo(() => {
     const map = new Map();

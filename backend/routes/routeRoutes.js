@@ -12,9 +12,13 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const parsedRoutes = await routeModel.getAllRoutes();
+    const includeIncomplete = String(req.query.includeIncomplete || '').toLowerCase() === 'true';
+    const routes = includeIncomplete
+      ? parsedRoutes
+      : parsedRoutes.filter((route) => (route.stops?.length || 0) >= 2);
     res.json({
       success: true,
-      data: parsedRoutes,
+      data: routes,
       message: 'All routes fetched successfully',
     });
   } catch (error) {

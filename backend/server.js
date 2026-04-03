@@ -68,6 +68,41 @@ app.set('io', io);
 // Bus simulators
 let busSimulators = {};
 let liveBroadcastInterval = null;
+let simulatorRecoveryInterval = null;
+let simulatorInitState = {
+  status: 'idle',
+  expected: 0,
+  initialized: 0,
+  failedBusIds: [],
+  lastInitializedAt: null,
+  lastError: null,
+};
+
+const updateSimulatorState = (patch) => {
+  simulatorInitState = {
+    ...simulatorInitState,
+    ...patch,
+    initialized: Object.keys(busSimulators).length,
+  };
+};
+
+const stopAllBusSimulations = () => {
+  Object.values(busSimulators).forEach((sim) => {
+    try {
+      sim.stop();
+    } catch (error) {
+      console.error('Error stopping bus simulator:', error.message);
+    }
+  });
+  busSimulators = {};
+};
+
+const startBusSimulator = async (bus) => {
+  const simulator = new OSRMBusSimulator(bus.id, 2000);
+  await simulator.start();
+  busSimulators[bus.id] = simulator;
+  updateSimulatorState({ failedBusIds: simulatorInitState.failedBusIds.filter((id) => id !== bus.id) });
+};
 
 const enrichLocationsWithSimulatorState = (locations) => {
   if (!Array.isArray(locations)) return [];
@@ -88,23 +123,41 @@ const enrichLocationsWithSimulatorState = (locations) => {
   });
 };
 
-const initializeBusSimulations = async () => {
+const initializeBusSimulations = async ({ fullRestart = false } = {}) => {
   try {
     console.log('\n📡 Initializing Bus Simulations...');
+    if (fullRestart) {
+      stopAllBusSimulations();
+    }
+
+    updateSimulatorState({
+      status: 'initializing',
+      failedBusIds: [],
+      lastError: null,
+      lastInitializedAt: null,
+    });
+
     const buses = await busModel.getAllBuses();
     const activeBuses = buses.filter((bus) => bus.status === 'active');
+    updateSimulatorState({ expected: activeBuses.length });
 
     if (activeBuses.length === 0) {
       console.log('⚠️  No active buses found. Bus simulation will not start.');
+      updateSimulatorState({
+        status: 'ready',
+        expected: 0,
+        failedBusIds: [],
+        lastInitializedAt: new Date().toISOString(),
+      });
       return;
     }
 
     const failedBuses = [];
     for (const bus of activeBuses) {
+      if (busSimulators[bus.id]) continue;
+
       try {
-        const simulator = new OSRMBusSimulator(bus.id, 2000);
-        await simulator.start();
-        busSimulators[bus.id] = simulator;
+        await startBusSimulator(bus);
       } catch (error) {
         console.error(`❌ Failed to initialize simulator for Bus ${bus.id}:`, error.message);
         failedBuses.push(bus);
@@ -118,19 +171,48 @@ const initializeBusSimulations = async () => {
       for (const bus of failedBuses) {
         if (busSimulators[bus.id]) continue;
         try {
-          const simulator = new OSRMBusSimulator(bus.id, 2000);
-          await simulator.start();
-          busSimulators[bus.id] = simulator;
+          await startBusSimulator(bus);
         } catch (error) {
           console.error(`❌ Retry failed for Bus ${bus.id}:`, error.message);
         }
       }
     }
 
+    const failedBusIds = activeBuses
+      .filter((bus) => !busSimulators[bus.id])
+      .map((bus) => bus.id);
+
+    updateSimulatorState({
+      status: failedBusIds.length ? 'degraded' : 'ready',
+      failedBusIds,
+      lastInitializedAt: new Date().toISOString(),
+    });
+
     console.log(`✅ Initialized ${Object.keys(busSimulators).length} bus simulator(s)\n`);
   } catch (error) {
     console.error('❌ Error initializing bus simulations:', error.message);
+    updateSimulatorState({
+      status: 'error',
+      failedBusIds: simulatorInitState.expected ? Array.from({ length: simulatorInitState.expected }) : [],
+      lastError: error.message,
+      lastInitializedAt: new Date().toISOString(),
+    });
   }
+};
+
+const ensureBusSimulationsHealthy = async () => {
+  if (simulatorInitState.status === 'initializing') {
+    return;
+  }
+
+  const expected = simulatorInitState.expected || 0;
+  const actual = Object.keys(busSimulators).length;
+  if (expected > 0 && actual >= expected) {
+    return;
+  }
+
+  console.warn(`🔁 Simulator recovery triggered (${actual}/${expected} running)`);
+  await initializeBusSimulations();
 };
 
 const emitLatestLocations = async () => {
@@ -161,6 +243,11 @@ app.get('/api/health', (req, res) => {
     message: 'Backend is running!',
     timestamp: new Date().toISOString(),
     simulators: Object.keys(busSimulators).length,
+    simulator_status: simulatorInitState.status,
+    expected_simulators: simulatorInitState.expected,
+    failed_simulators: simulatorInitState.failedBusIds,
+    last_simulator_init_at: simulatorInitState.lastInitializedAt,
+    simulator_error: simulatorInitState.lastError,
   });
 });
 
@@ -201,18 +288,30 @@ const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, async () => {
   console.log(`\n✅ Backend on port ${PORT}\n`);
 
-  await initializeBusSimulations();
+  await initializeBusSimulations({ fullRestart: true });
   if (!liveBroadcastInterval) {
     liveBroadcastInterval = setInterval(() => {
       emitLatestLocations();
     }, 3000);
   }
+
+  if (!simulatorRecoveryInterval) {
+    simulatorRecoveryInterval = setInterval(() => {
+      ensureBusSimulationsHealthy().catch((error) => {
+        console.error('Error during simulator recovery:', error.message);
+      });
+    }, 30000);
+  }
 });
 
-process.on('SIGINT', () => {
+const shutdown = () => {
   console.log('\n🛑 Shutting down...');
   if (liveBroadcastInterval) clearInterval(liveBroadcastInterval);
-  Object.values(busSimulators).forEach((sim) => sim.stop());
+  if (simulatorRecoveryInterval) clearInterval(simulatorRecoveryInterval);
+  stopAllBusSimulations();
 
   process.exit(0);
-});
+};
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

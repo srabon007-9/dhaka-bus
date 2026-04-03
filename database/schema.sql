@@ -141,6 +141,78 @@ CREATE TABLE IF NOT EXISTS tickets (
   FOREIGN KEY (dropoff_stop_id) REFERENCES bus_stops(id) ON DELETE RESTRICT
 );
 
+-- Table 6.5: Manual Payments
+-- Stores pending and reviewed offline payment attempts
+CREATE TABLE IF NOT EXISTS manual_payments (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  payment_id VARCHAR(50) UNIQUE NOT NULL,
+  user_id INT NULL,
+  amount DECIMAL(10, 2) NOT NULL,
+  currency VARCHAR(3) DEFAULT 'bdt',
+  payment_method ENUM('bkash', 'nagad', 'both') NOT NULL,
+  booking_payload JSON NOT NULL,
+  status ENUM('pending', 'verified', 'completed', 'rejected', 'cancelled') DEFAULT 'pending',
+  payment_details JSON NULL,
+  verified_by INT NULL,
+  verified_at TIMESTAMP NULL,
+  notes TEXT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMP DEFAULT (DATE_ADD(NOW(), INTERVAL 30 MINUTE)),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (verified_by) REFERENCES users(id) ON DELETE SET NULL,
+  INDEX idx_manual_payments_status_expires (status, expires_at),
+  INDEX idx_manual_payments_user_status_created (user_id, status, created_at),
+  INDEX idx_manual_payments_method_status (payment_method, status)
+);
+
+-- Table 6.6: Nagad Payments
+-- Stores gateway payment attempts for online payment verification
+CREATE TABLE IF NOT EXISTS nagad_payments (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  payment_ref_id VARCHAR(50) UNIQUE NOT NULL,
+  merchant_id VARCHAR(100) NOT NULL,
+  amount DECIMAL(10, 2) NOT NULL,
+  currency VARCHAR(3) DEFAULT 'bdt',
+  booking_payload JSON NOT NULL,
+  user_id INT NULL,
+  status ENUM('pending', 'completed', 'failed', 'cancelled') DEFAULT 'pending',
+  payment_details JSON NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  completed_at TIMESTAMP NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- Table 6.7: Payment Sessions
+-- Tracks checkout attempts before ticket issuance
+CREATE TABLE IF NOT EXISTS payment_sessions (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  session_id VARCHAR(255) NOT NULL UNIQUE,
+  user_id INT NOT NULL,
+  booking_payload JSON NOT NULL,
+  amount_expected DECIMAL(10, 2) NOT NULL,
+  currency VARCHAR(10) NOT NULL DEFAULT 'bdt',
+  status ENUM('pending', 'completed', 'failed') DEFAULT 'pending',
+  ticket_id INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  completed_at DATETIME NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE SET NULL,
+  INDEX idx_payment_sessions_user_status (user_id, status)
+);
+
+-- Table 6.8: Password Reset Tokens
+-- Stores one-time password reset requests
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  token_hash VARCHAR(128) NOT NULL UNIQUE,
+  expires_at DATETIME NOT NULL,
+  used_at DATETIME NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_password_reset_user_expires (user_id, expires_at)
+);
+
 -- Table 7: Ticket Seats (per-seat passenger identity)
 -- Stores one row per seat with passenger info for each ticket
 CREATE TABLE IF NOT EXISTS ticket_seats (

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { stopApi, ticketApi, tripApi } from '../../services/api';
-import { useAuthContext } from '../../contexts/AuthContext';
+import { useAuthContext } from '../../contexts/AuthContextValue';
 import useToast from '../../hooks/useToast';
 import Toast from '../common/Toast';
 

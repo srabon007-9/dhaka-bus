@@ -34,10 +34,19 @@ const getPersistedAuth = () => {
   const storage = localToken ? localStorage : sessionToken ? sessionStorage : null;
   const token = localToken || sessionToken || '';
   const rawUser = storage ? readStorage(storage, USER_KEY) : null;
+  let user = null;
+
+  if (rawUser) {
+    try {
+      user = JSON.parse(rawUser);
+    } catch {
+      clearPersistedAuth();
+    }
+  }
 
   return {
     token,
-    user: rawUser ? JSON.parse(rawUser) : null,
+    user,
     remember: storage === localStorage,
   };
 };

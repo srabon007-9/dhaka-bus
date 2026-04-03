@@ -6,7 +6,7 @@ import LoadingSkeleton from '../components/common/LoadingSkeleton';
 import Toast from '../components/common/Toast';
 import useToast from '../hooks/useToast';
 import { ticketApi } from '../services/api';
-import { useAuthContext } from '../contexts/AuthContext';
+import { useAuthContext } from '../contexts/AuthContextValue';
 import PageMotion from '../components/common/PageMotion';
 
 const parseSeatNumbers = (value) => {
