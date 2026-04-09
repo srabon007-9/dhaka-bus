@@ -179,7 +179,8 @@ CREATE TABLE IF NOT EXISTS nagad_payments (
   payment_details JSON NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   completed_at TIMESTAMP NULL,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+  INDEX idx_nagad_payments_user_id (user_id)
 );
 
 -- Table 6.7: Payment Sessions
@@ -242,6 +243,7 @@ CREATE TABLE IF NOT EXISTS passenger_events (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_passenger_events_trip_stop (trip_id, stop_id, event_time),
   INDEX idx_passenger_events_ticket_seat (ticket_id, seat_number, event_time),
+  INDEX idx_passenger_events_recorded_by_user (recorded_by_user_id),
   UNIQUE KEY uq_passenger_event_stop (ticket_id, seat_number, stop_id, event_type),
   FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE CASCADE,
   FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE,

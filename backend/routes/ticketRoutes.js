@@ -160,6 +160,26 @@ const findTicketForManualPayment = async ({ payment, fallbackUserId }) => {
   )) || null;
 };
 
+const findTicketForNagadPayment = async ({ payment, fallbackUserId }) => {
+  const bookingPayload = parseStoredBookingPayload(payment.booking_payload);
+  if (!bookingPayload) {
+    return null;
+  }
+
+  const userId = Number(payment.user_id || bookingPayload.user_id || fallbackUserId);
+  if (!userId) {
+    return null;
+  }
+
+  const tickets = await ticketModel.getTicketsByUserId(userId);
+  return tickets.find((ticket) => (
+    Number(ticket.trip_id) === Number(bookingPayload.trip_id)
+    && Number(ticket.boarding_stop_id) === Number(bookingPayload.boarding_stop_id)
+    && Number(ticket.dropoff_stop_id) === Number(bookingPayload.dropoff_stop_id)
+    && seatListsMatch(ticket.seat_numbers, bookingPayload.seat_numbers)
+  )) || null;
+};
+
 const finalizeManualPaymentTicket = async ({ payment, paymentId, userForEmail }) => {
   const bookingPayload = parseStoredBookingPayload(payment.booking_payload);
   if (!bookingPayload) {
@@ -210,20 +230,38 @@ const finalizePaidSession = async ({ paymentRefId, enforceUserId }) => {
     throw error;
   }
 
-  if (nagadPayment.status === 'completed') {
-    // Try to find the ticket created from this payment
-    const tickets = await ticketModel.getTicketsByUserId(nagadPayment.user_id);
-    const relatedTicket = tickets.find(t => t.id > 0); // Return any ticket (in real scenario, store ticket_id in payment)
-    return {
-      alreadyConfirmed: true,
-      ticket: relatedTicket ? buildTicketResponse(relatedTicket) : { payment_status: 'completed' },
-    };
-  }
-
   if (nagadPayment.status !== 'completed') {
     const error = new Error('Payment is not completed yet');
     error.statusCode = 402;
     throw error;
+  }
+
+  const paymentDetails = parseStoredPaymentDetails(nagadPayment.payment_details) || {};
+  const existingTicketId = Number(paymentDetails.ticket_id);
+  if (existingTicketId) {
+    const existingTicket = await ticketModel.getTicketById(existingTicketId);
+    if (existingTicket) {
+      return {
+        alreadyConfirmed: true,
+        ticket: buildTicketResponse(existingTicket),
+      };
+    }
+  }
+
+  const relatedTicket = await findTicketForNagadPayment({
+    payment: nagadPayment,
+    fallbackUserId: enforceUserId,
+  });
+  if (relatedTicket) {
+    await nagadPaymentModel.markPaymentCompleted(paymentRefId, {
+      ...paymentDetails,
+      ticket_id: relatedTicket.id,
+    });
+
+    return {
+      alreadyConfirmed: true,
+      ticket: buildTicketResponse(relatedTicket),
+    };
   }
 
   const bookingPayload = parseStoredBookingPayload(nagadPayment.booking_payload);
@@ -234,7 +272,10 @@ const finalizePaidSession = async ({ paymentRefId, enforceUserId }) => {
   }
 
   const ticket = await ticketModel.reserveTicket(bookingPayload);
-  await nagadPaymentModel.markPaymentCompleted(paymentRefId, { ticket_id: ticket.id });
+  await nagadPaymentModel.markPaymentCompleted(paymentRefId, {
+    ...paymentDetails,
+    ticket_id: ticket.id,
+  });
 
   const savedTicket = await ticketModel.getTicketById(ticket.id);
   return {

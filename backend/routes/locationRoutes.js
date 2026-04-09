@@ -6,6 +6,11 @@ const locationModel = require('../models/locationModel');
 
 const router = express.Router();
 
+const toPositiveInt = (value) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
 // GET /api/locations - Get all current bus locations
 // Returns the latest location for each bus (used for map display)
 router.get('/', async (req, res) => {
@@ -29,8 +34,16 @@ router.get('/', async (req, res) => {
 // Example: /api/locations/latest/1
 router.get('/latest/:busId', async (req, res) => {
   try {
+    const busId = toPositiveInt(req.params.busId);
+    if (!busId) {
+      return res.status(400).json({
+        success: false,
+        message: 'busId must be a positive integer',
+      });
+    }
+
     const location = await locationModel.getLatestLocationByBusId(
-      req.params.busId
+      busId
     );
     if (!location) {
       return res.status(404).json({
@@ -56,9 +69,26 @@ router.get('/latest/:busId', async (req, res) => {
 // Example: /api/locations/history/1?limit=20
 router.get('/history/:busId', async (req, res) => {
   try {
-    const limit = req.query.limit || 50;
+    const busId = toPositiveInt(req.params.busId);
+    if (!busId) {
+      return res.status(400).json({
+        success: false,
+        message: 'busId must be a positive integer',
+      });
+    }
+
+    const rawLimit = req.query.limit;
+    const parsedLimit = rawLimit === undefined ? 50 : Number(rawLimit);
+    if (!Number.isInteger(parsedLimit) || parsedLimit <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'limit must be a positive integer',
+      });
+    }
+
+    const limit = Math.min(parsedLimit, 500);
     const history = await locationModel.getLocationHistory(
-      req.params.busId,
+      busId,
       limit
     );
     res.json({

@@ -4,9 +4,18 @@ const { verifyToken, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
+const toPositiveInt = (value) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
 router.get('/', async (req, res) => {
   try {
-    const { routeId } = req.query;
+    const routeId = req.query.routeId === undefined ? null : toPositiveInt(req.query.routeId);
+    if (req.query.routeId !== undefined && !routeId) {
+      return res.status(400).json({ success: false, message: 'routeId must be a positive integer' });
+    }
+
     const trips = routeId
       ? await tripModel.getTripsByRouteId(routeId)
       : await tripModel.getAllTrips();
@@ -19,7 +28,12 @@ router.get('/', async (req, res) => {
 
 router.get('/:id', async (req, res) => {
   try {
-    const trip = await tripModel.getTripById(req.params.id);
+    const tripId = toPositiveInt(req.params.id);
+    if (!tripId) {
+      return res.status(400).json({ success: false, message: 'Trip id must be a positive integer' });
+    }
+
+    const trip = await tripModel.getTripById(tripId);
     if (!trip) {
       return res.status(404).json({ success: false, message: 'Trip not found' });
     }
@@ -47,7 +61,12 @@ router.post('/', verifyToken, requireAdmin, async (req, res) => {
 
 router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
-    const existing = await tripModel.getTripById(req.params.id);
+    const tripId = toPositiveInt(req.params.id);
+    if (!tripId) {
+      return res.status(400).json({ success: false, message: 'Trip id must be a positive integer' });
+    }
+
+    const existing = await tripModel.getTripById(tripId);
     if (!existing) {
       return res.status(404).json({ success: false, message: 'Trip not found' });
     }
@@ -62,7 +81,7 @@ router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
       status: req.body.status ?? existing.status,
     };
 
-    const result = await tripModel.updateTrip(req.params.id, payload);
+    const result = await tripModel.updateTrip(tripId, payload);
     return res.json({ success: true, data: result, message: 'Trip updated successfully' });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Error updating trip', error: error.message });
@@ -71,7 +90,12 @@ router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
 
 router.delete('/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
-    const result = await tripModel.deleteTrip(req.params.id);
+    const tripId = toPositiveInt(req.params.id);
+    if (!tripId) {
+      return res.status(400).json({ success: false, message: 'Trip id must be a positive integer' });
+    }
+
+    const result = await tripModel.deleteTrip(tripId);
     if (!result.affectedRows) {
       return res.status(404).json({ success: false, message: 'Trip not found' });
     }

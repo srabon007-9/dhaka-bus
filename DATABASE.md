@@ -28,7 +28,7 @@ Main relationship flow:
 
 The schema uses foreign keys, indexes, and status enums.
 
-## Why this is a proper database project
+## Why this is a database project
 
 - Primary key on every table
 - Foreign key constraints with clear delete behavior
