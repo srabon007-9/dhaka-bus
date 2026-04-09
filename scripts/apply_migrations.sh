@@ -38,6 +38,12 @@ run_mysql() {
   mysql "${MYSQL_ARGS[@]}" "$@"
 }
 
+escape_sql_literal() {
+  local input="$1"
+  # Escape single quotes for SQL string literals.
+  printf "%s" "$input" | sed "s/'/''/g"
+}
+
 echo "Ensuring schema_migrations table exists..."
 run_mysql -e "
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -58,9 +64,11 @@ fi
 for migration_file in "${migration_files[@]}"; do
   filename="$(basename "$migration_file")"
   checksum="$(shasum -a 256 "$migration_file" | awk '{print $1}')"
+  escaped_filename="$(escape_sql_literal "$filename")"
+  escaped_checksum="$(escape_sql_literal "$checksum")"
 
   applied_row="$(run_mysql --batch --skip-column-names -e \
-    "SELECT checksum FROM schema_migrations WHERE filename = '$filename' LIMIT 1;" || true)"
+    "SELECT checksum FROM schema_migrations WHERE filename = '$escaped_filename' LIMIT 1;" || true)"
 
   if [[ -n "$applied_row" ]]; then
     if [[ "$applied_row" != "$checksum" ]]; then
@@ -75,7 +83,7 @@ for migration_file in "${migration_files[@]}"; do
   echo "Applying migration: $filename"
   run_mysql < "$migration_file"
   run_mysql -e \
-    "INSERT INTO schema_migrations (filename, checksum) VALUES ('$filename', '$checksum');"
+    "INSERT INTO schema_migrations (filename, checksum) VALUES ('$escaped_filename', '$escaped_checksum');"
 done
 
 echo "All migrations applied successfully."
