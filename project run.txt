@@ -1,0 +1,31 @@
+Dhaka Bus - Faculty Demo Terminal Steps
+
+1) Open terminal in project folder
+cd /Users/srabonahmed/Programming/Projects/dhaka-bus
+
+2) Start the full app stack (safe for your laptop because local MySQL already uses 3306)
+MYSQL_PORT=3307 docker compose up --build -d
+
+3) Confirm services are running
+MYSQL_PORT=3307 docker compose ps
+
+4) Quick backend health check
+curl -sS http://localhost:3000/api/health
+
+5) Open demo URLs in browser
+Frontend: http://localhost
+Backend health: http://localhost:3000/api/health
+phpMyAdmin: http://localhost:8080
+
+6) Optional: Watch live logs during demo
+docker compose logs -f backend frontend mysql
+
+7) Stop everything after demo
+docker compose down
+
+8) If you want to remove containers + DB volume (full reset, optional)
+docker compose down -v
+
+Notes:
+- Keep using MYSQL_PORT=3307 for startup commands on this laptop.
+- If Docker is not running, open Docker Desktop first.
