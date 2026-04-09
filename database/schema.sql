@@ -1,19 +1,9 @@
--- Dhaka Bus Tracking System - Database Schema
--- This file creates all tables needed for the application
+-- Core schema for the Dhaka Bus system
 
--- Create the main database
 CREATE DATABASE IF NOT EXISTS dhaka_bus;
 USE dhaka_bus;
 
--- Table 1: Routes
--- Stores all bus routes (designed for scalability - supports unlimited routes)
--- Currently seeded with: Route 1 (Dhanmondi–Airport Express)
--- 
--- To add a new route:
--- INSERT INTO routes (route_name, start_point, end_point) VALUES 
---   ('Route Name', 'Start Location', 'End Location');
---
--- Then add stops, waypoints, and buses with the new route_id
+-- Routes
 CREATE TABLE IF NOT EXISTS routes (
   id INT PRIMARY KEY AUTO_INCREMENT,
   route_name VARCHAR(255) NOT NULL UNIQUE,
@@ -22,30 +12,27 @@ CREATE TABLE IF NOT EXISTS routes (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Table 1.5: Bus Stops
--- Stores ordered stops along a route with coordinates
+-- Stops per route in travel order
 CREATE TABLE IF NOT EXISTS bus_stops (
   id INT PRIMARY KEY AUTO_INCREMENT,
   route_id INT NOT NULL,
   stop_name VARCHAR(100) NOT NULL,
   latitude DECIMAL(10, 7) NOT NULL,
   longitude DECIMAL(10, 7) NOT NULL,
-  stop_order INT NOT NULL, -- Order of stop along route
+  stop_order INT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (route_id) REFERENCES routes(id) ON DELETE CASCADE,
   INDEX idx_route_id (route_id),
   INDEX idx_stop_order (stop_order)
 );
 
--- Table 1.6: Route Waypoints
--- Stores detailed waypoints that follow actual roads between stops
--- Allows realistic road-based bus movement instead of straight lines
+-- Waypoints between stops for road-following movement
 CREATE TABLE IF NOT EXISTS route_waypoints (
   id INT PRIMARY KEY AUTO_INCREMENT,
   route_id INT NOT NULL,
-  stop_from_order INT NOT NULL, -- Starting stop order
-  stop_to_order INT NOT NULL, -- Ending stop order
-  waypoint_sequence INT NOT NULL, -- Order within this segment
+  stop_from_order INT NOT NULL,
+  stop_to_order INT NOT NULL,
+  waypoint_sequence INT NOT NULL,
   latitude DECIMAL(10, 7) NOT NULL,
   longitude DECIMAL(10, 7) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -54,19 +41,12 @@ CREATE TABLE IF NOT EXISTS route_waypoints (
   INDEX idx_route_waypoint (route_id, waypoint_sequence)
 );
 
--- Table 2: Buses
--- Stores information about each bus
--- Each bus is assigned to a route via route_id
--- Multiple buses can be assigned to same route (e.g., Route 1 can have buses 1-10)
--- 
--- To add a new bus to a specific route:
--- INSERT INTO buses (name, route_id, capacity, status) VALUES 
---   ('Bus Name', route_id, 40, 'active');
+-- Buses
 CREATE TABLE IF NOT EXISTS buses (
   id INT PRIMARY KEY AUTO_INCREMENT,
-  name VARCHAR(100) NOT NULL, -- Bus name/number (e.g., "Airport Express 1")
-  route_id INT NOT NULL, -- Foreign key to routes table
-  capacity INT DEFAULT 40, -- Number of seats
+  name VARCHAR(100) NOT NULL,
+  route_id INT NOT NULL,
+  capacity INT DEFAULT 40,
   status ENUM('active', 'inactive', 'maintenance') DEFAULT 'active',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (route_id) REFERENCES routes(id) ON DELETE CASCADE,
@@ -74,26 +54,23 @@ CREATE TABLE IF NOT EXISTS buses (
   INDEX idx_status (status)
 );
 
--- Table 3: Locations
--- Stores GPS locations of buses (real-time or simulated)
--- This table can grow large, so in production you'd archive old data
+-- Live/simulated location history for buses
 CREATE TABLE IF NOT EXISTS locations (
   id INT PRIMARY KEY AUTO_INCREMENT,
   bus_id INT NOT NULL,
-  latitude DECIMAL(9, 6) NOT NULL, -- -90 to 90
-  longitude DECIMAL(9, 6) NOT NULL, -- -180 to 180
+  latitude DECIMAL(9, 6) NOT NULL,
+  longitude DECIMAL(9, 6) NOT NULL,
   speed_kmh DECIMAL(6, 2) DEFAULT 0,
   timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (bus_id) REFERENCES buses(id) ON DELETE CASCADE,
-  INDEX idx_bus_time (bus_id, timestamp) -- For faster queries
+  INDEX idx_bus_time (bus_id, timestamp)
 );
 
--- Create indexes for better query performance
+-- Extra indexes for common lookups
 CREATE INDEX idx_bus_route ON buses(route_id);
 CREATE INDEX idx_location_latest ON locations(bus_id, timestamp DESC);
 
--- Table 4: Users
--- Authentication users (admin and regular users)
+-- Users
 CREATE TABLE IF NOT EXISTS users (
   id INT PRIMARY KEY AUTO_INCREMENT,
   name VARCHAR(120) NOT NULL,
@@ -106,8 +83,7 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Table 5: Trips
--- A scheduled departure of a bus on a route
+-- Scheduled trips
 CREATE TABLE IF NOT EXISTS trips (
   id INT PRIMARY KEY AUTO_INCREMENT,
   route_id INT NOT NULL,
@@ -122,8 +98,7 @@ CREATE TABLE IF NOT EXISTS trips (
   FOREIGN KEY (bus_id) REFERENCES buses(id) ON DELETE CASCADE
 );
 
--- Table 6: Tickets
--- Bookings created by users against a trip
+-- Tickets
 CREATE TABLE IF NOT EXISTS tickets (
   id INT PRIMARY KEY AUTO_INCREMENT,
   user_id INT NOT NULL,
@@ -141,8 +116,7 @@ CREATE TABLE IF NOT EXISTS tickets (
   FOREIGN KEY (dropoff_stop_id) REFERENCES bus_stops(id) ON DELETE RESTRICT
 );
 
--- Table 6.5: Manual Payments
--- Stores pending and reviewed offline payment attempts
+-- Offline/manual payment attempts
 CREATE TABLE IF NOT EXISTS manual_payments (
   id INT PRIMARY KEY AUTO_INCREMENT,
   payment_id VARCHAR(50) UNIQUE NOT NULL,
@@ -165,8 +139,7 @@ CREATE TABLE IF NOT EXISTS manual_payments (
   INDEX idx_manual_payments_method_status (payment_method, status)
 );
 
--- Table 6.6: Nagad Payments
--- Stores gateway payment attempts for online payment verification
+-- Nagad gateway payment attempts
 CREATE TABLE IF NOT EXISTS nagad_payments (
   id INT PRIMARY KEY AUTO_INCREMENT,
   payment_ref_id VARCHAR(50) UNIQUE NOT NULL,
@@ -183,8 +156,7 @@ CREATE TABLE IF NOT EXISTS nagad_payments (
   INDEX idx_nagad_payments_user_id (user_id)
 );
 
--- Table 6.7: Payment Sessions
--- Tracks checkout attempts before ticket issuance
+-- Checkout sessions before ticket creation
 CREATE TABLE IF NOT EXISTS payment_sessions (
   id INT PRIMARY KEY AUTO_INCREMENT,
   session_id VARCHAR(255) NOT NULL UNIQUE,
@@ -201,8 +173,7 @@ CREATE TABLE IF NOT EXISTS payment_sessions (
   INDEX idx_payment_sessions_user_status (user_id, status)
 );
 
--- Table 6.8: Password Reset Tokens
--- Stores one-time password reset requests
+-- Password reset tokens
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
   id INT PRIMARY KEY AUTO_INCREMENT,
   user_id INT NOT NULL,
@@ -214,8 +185,7 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
   INDEX idx_password_reset_user_expires (user_id, expires_at)
 );
 
--- Table 7: Ticket Seats (per-seat passenger identity)
--- Stores one row per seat with passenger info for each ticket
+-- Per-seat passenger records per ticket
 CREATE TABLE IF NOT EXISTS ticket_seats (
   id INT PRIMARY KEY AUTO_INCREMENT,
   ticket_id INT NOT NULL,
@@ -227,8 +197,7 @@ CREATE TABLE IF NOT EXISTS ticket_seats (
   FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE CASCADE
 );
 
--- Table 8: Passenger Events (explicit boarding/alighting logs)
--- Stores physical board/alight events per ticket seat at stops
+-- Boarding and alighting logs by stop
 CREATE TABLE IF NOT EXISTS passenger_events (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   ticket_id INT NOT NULL,
