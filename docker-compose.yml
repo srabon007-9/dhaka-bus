@@ -16,7 +16,7 @@ services:
     
     # Port mapping: host_port:container_port
     ports:
-      - "3306:3306"
+      - "${MYSQL_PORT:-3306}:3306"
     
     # Volumes for data persistence
     # This means database data is saved even if container is deleted
