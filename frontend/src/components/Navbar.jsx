@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuthContext } from '../contexts/AuthContextValue';
 
 const publicLinks = [
@@ -14,17 +14,17 @@ const privateLinks = [
 ];
 
 const desktopLinkClassName = ({ isActive }) => [
-  'group relative inline-flex items-center rounded-lg border px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium tracking-[0.01em] transition-all duration-200',
+  'group relative inline-flex items-center rounded-full px-5 py-2 text-sm font-semibold tracking-wide transition-all duration-300',
   isActive
-    ? 'border-cyan-300/60 bg-cyan-300/18 text-white'
-    : 'border-white/14 bg-white/8 text-white hover:border-white/30 hover:bg-white/14',
+    ? 'bg-white/10 !text-white shadow-[inset_0_1px_2px_rgba(255,255,255,0.2)] ring-1 ring-white/20'
+    : '!text-white hover:bg-white/10',
 ].join(' ');
 
 const mobileLinkClassName = ({ isActive }) => [
-  'block rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
+  'block rounded-xl px-4 py-3 text-sm font-semibold tracking-wide transition-all duration-300 ease-out',
   isActive
-    ? 'bg-white/12 text-white'
-    : 'text-white hover:bg-white/8 hover:text-white',
+    ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 !text-white shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)] border border-cyan-500/30'
+    : '!text-white hover:bg-white/10',
 ].join(' ');
 
 function UserMenu({ user, userInitial, userMenuOpen, onToggle, onClose, onLogout }) {
@@ -33,47 +33,40 @@ function UserMenu({ user, userInitial, userMenuOpen, onToggle, onClose, onLogout
       <button
         type="button"
         onClick={onToggle}
-        className="flex items-center gap-1.5 sm:gap-2 rounded-full border border-white/12 bg-white/6 px-1.5 sm:px-2 py-1.5 text-left transition-colors hover:border-white/24 hover:bg-white/10"
+        className="group flex items-center gap-2 rounded-full bg-slate-800/50 p-1.5 pr-3 shadow-sm ring-1 ring-white/10 transition-all hover:bg-slate-700/50 hover:ring-white/20"
         aria-haspopup="menu"
         aria-expanded={userMenuOpen}
       >
-        <span className="flex h-7 sm:h-8 w-7 sm:w-8 items-center justify-center rounded-full bg-cyan-300/18 text-xs font-semibold text-cyan-100 flex-shrink-0">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 text-sm font-bold text-white shadow-inner">
           {userInitial}
         </span>
-        <span className="hidden xs:inline max-w-24 sm:max-w-35 truncate text-xs sm:text-sm font-medium text-slate-100">{user?.name}</span>
-        <span className="text-xs text-slate-400">▾</span>
+        <span className="hidden sm:block max-w-[100px] truncate text-sm font-semibold text-slate-200">
+          {user?.name}
+        </span>
+        <span className="text-xs text-slate-400 transition-colors group-hover:text-white">▼</span>
       </button>
 
       {userMenuOpen ? (
-        <div className="absolute right-0 sm:right-2 top-[calc(100%+0.55rem)] min-w-48 sm:min-w-50 rounded-xl border border-white/12 bg-slate-900/96 p-1.5 shadow-[0_16px_38px_rgba(2,6,23,0.42)] backdrop-blur z-50">
-          <div className="rounded-lg px-3 py-2">
-            <p className="truncate text-xs sm:text-sm font-semibold text-slate-100">{user?.name}</p>
-            <p className="text-xs text-slate-400">{user?.role === 'admin' ? 'Administrator' : 'Verified rider'}</p>
+        <div className="absolute right-0 top-12 w-56 rounded-2xl bg-slate-900/95 p-2 shadow-2xl ring-1 ring-white/10 backdrop-blur-xl z-[10000] animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="px-3 py-2">
+            <p className="truncate text-sm font-bold text-white">{user?.name}</p>
+            <p className="text-xs text-cyan-400 font-medium mt-0.5">{user?.role === 'admin' ? 'Administrator' : 'Verified Rider'}</p>
           </div>
           <div className="my-1 h-px bg-white/10" />
-          <button
-            type="button"
-            className="w-full cursor-default rounded-lg px-3 py-2 text-left text-sm text-slate-400"
-            aria-disabled="true"
-          >
+          <button className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-300 hover:bg-white/10 hover:text-white transition-colors">
             Profile
           </button>
-          <button
-            type="button"
-            className="w-full cursor-default rounded-lg px-3 py-2 text-left text-sm text-slate-400"
-            aria-disabled="true"
-          >
+          <button className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-300 hover:bg-white/10 hover:text-white transition-colors">
             Settings
           </button>
           <button
-            type="button"
             onClick={() => {
               onLogout();
               onClose();
             }}
-            className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-rose-200 transition-colors hover:bg-rose-400/14"
+            className="w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors mt-1"
           >
-            Logout
+            Sign out
           </button>
         </div>
       ) : null}
@@ -85,6 +78,29 @@ export default function Navbar() {
   const { isAuthenticated, user, logout } = useAuthContext();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
+  const [lastScrollY, setLastScrollY] = useState(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      
+      // Hide navbar when scrolling down, show when scrolling up
+      if (currentScrollY > lastScrollY && currentScrollY > 80) {
+        setIsVisible(false);
+        // Close menus when hiding
+        setMobileMenuOpen(false);
+        setUserMenuOpen(false);
+      } else {
+        setIsVisible(true);
+      }
+      
+      setLastScrollY(currentScrollY);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [lastScrollY]);
 
   const links = [
     ...publicLinks,
@@ -100,37 +116,46 @@ export default function Navbar() {
   const userInitial = String(user?.name || 'U').trim().charAt(0).toUpperCase();
 
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-slate-950/70 backdrop-blur-xl">
-      <div className="mx-auto flex h-14 sm:h-15 max-w-7xl items-center gap-2 sm:gap-4 px-3 sm:px-6 lg:px-8">
+    <header className={`sticky top-0 z-[9999] w-full border-b border-white/10 bg-slate-950/80 backdrop-blur-md supports-[backdrop-filter]:bg-slate-950/60 transition-transform duration-300 ease-in-out ${isVisible ? 'translate-y-0' : '-translate-y-full'}`}>
+      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        
+        {/* Logo */}
         <NavLink
           to="/"
           onClick={closeMenu}
-          className="flex items-center gap-1.5 sm:gap-2 rounded-md px-1 sm:px-1.5 py-1 transition-opacity hover:opacity-95 flex-shrink-0"
+          className="group flex items-center gap-3 transition-transform duration-300 hover:scale-105"
         >
-          <div className="flex h-7 sm:h-8 w-7 sm:w-8 items-center justify-center rounded-md bg-cyan-300/16 text-xs font-semibold text-cyan-100">
-            DB
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600 shadow-[0_0_20px_rgba(6,182,212,0.4)]">
+            <span className="text-sm font-black text-white tracking-wider">DB</span>
           </div>
-          <p className="hidden xs:inline text-xs sm:text-sm font-semibold tracking-[0.01em] text-white whitespace-nowrap">
-            Dhaka Bus
-          </p>
+          <div className="hidden xs:block">
+            <h1 className="text-lg font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-300">
+              DHAKA BUS
+            </h1>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-400/90 -mt-1">
+              Transit Platform
+            </p>
+          </div>
         </NavLink>
 
-        <nav className="mx-auto hidden items-center gap-2 sm:gap-3 md:flex">
+        {/* Desktop Navigation */}
+        <nav className="hidden md:flex items-center gap-2 rounded-full bg-slate-900/50 p-1.5 ring-1 ring-white/10 shadow-inner">
           {links.map((link) => (
             <NavLink key={link.to} to={link.to} className={desktopLinkClassName}>
               {({ isActive }) => (
-                <span className="relative text-white">
+                <span className="relative z-10">
                   {link.label}
-                  <span
-                    className={`absolute -bottom-1.5 left-0 h-0.5 w-full origin-left rounded-full bg-cyan-300 transition-transform duration-200 ${isActive ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'}`}
-                  />
+                  {isActive && (
+                    <span className="absolute -bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)]" />
+                  )}
                 </span>
               )}
             </NavLink>
           ))}
         </nav>
 
-        <div className="ml-auto hidden items-center gap-2 md:flex">
+        {/* Desktop Right Section */}
+        <div className="hidden md:flex items-center gap-4">
           {isAuthenticated ? (
             <UserMenu
               user={user}
@@ -141,63 +166,77 @@ export default function Navbar() {
               onLogout={logout}
             />
           ) : (
-            <NavLink to="/auth" className="rounded-full border border-cyan-300/35 bg-cyan-300/12 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-white transition-colors hover:border-cyan-300/55 hover:bg-cyan-300/22 whitespace-nowrap">
-              Sign In
+            <NavLink 
+              to="/auth" 
+              className="group relative inline-flex items-center justify-center overflow-hidden rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 px-8 py-2.5 font-bold text-white shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all hover:scale-105 hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] ring-1 ring-white/20"
+            >
+              <span className="relative z-10">Sign In</span>
+              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out rounded-full" />
             </NavLink>
           )}
         </div>
 
+        {/* Mobile Menu Button */}
         <button
           type="button"
-          onClick={() => setMobileMenuOpen((value) => !value)}
-          className="ml-auto inline-flex h-9 sm:h-10 w-9 sm:w-10 items-center justify-center rounded-lg border border-white/12 bg-white/6 text-white md:hidden transition-colors hover:bg-white/10"
-          aria-label="Toggle navigation"
-          aria-expanded={mobileMenuOpen}
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="md:hidden flex h-11 w-11 items-center justify-center rounded-xl bg-slate-800/50 text-slate-200 ring-1 ring-white/10 transition-colors hover:bg-slate-700 hover:text-white"
         >
-          <span className="text-base leading-none">{mobileMenuOpen ? '×' : '☰'}</span>
+          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            {mobileMenuOpen ? (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
+            )}
+          </svg>
         </button>
       </div>
 
-      {mobileMenuOpen ? (
-        <div className="border-t border-white/10 bg-slate-950/96 px-3 sm:px-6 py-3 sm:py-4 md:hidden sm:px-6 text-white animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="rounded-xl border border-white/10 bg-white/3 p-2 text-white">
+      {/* Mobile Menu Overlay */}
+      {mobileMenuOpen && (
+        <div className="md:hidden border-t border-white/10 bg-slate-900/95 backdrop-blur-2xl animate-in slide-in-from-top-4 duration-300 absolute w-full shadow-2xl">
+          <div className="p-4 space-y-2">
             {links.map((link) => (
               <NavLink key={link.to} to={link.to} onClick={closeMenu} className={mobileLinkClassName}>
                 {link.label}
               </NavLink>
             ))}
-          </div>
-          <div className="mt-3 sm:mt-4 border-t border-white/10 pt-3 sm:pt-4">
+            
+            <div className="my-4 h-px bg-white/10" />
+            
             {isAuthenticated ? (
-              <div className="space-y-2 sm:space-y-3">
-                <div className="flex items-center gap-2 sm:gap-3 rounded-xl border border-white/12 bg-white/5 px-2 sm:px-3 py-2 sm:py-2.5">
-                  <span className="flex h-8 sm:h-9 w-8 sm:w-9 items-center justify-center rounded-full bg-cyan-300/18 text-xs font-semibold text-cyan-100 flex-shrink-0">
+              <div className="space-y-3 bg-slate-800/50 p-4 rounded-2xl ring-1 ring-white/5">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 text-sm font-bold text-white shadow-inner">
                     {userInitial}
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs sm:text-sm font-semibold text-white truncate">{user?.name}</p>
-                    <p className="text-xs text-slate-400">{user?.role === 'admin' ? 'Administrator' : 'Verified rider'}</p>
+                  <div>
+                    <p className="text-sm font-bold text-white">{user?.name}</p>
+                    <p className="text-xs font-medium text-cyan-400">{user?.role === 'admin' ? 'Administrator' : 'Verified Rider'}</p>
                   </div>
                 </div>
                 <button
-                  type="button"
                   onClick={() => {
                     logout();
                     closeMenu();
                   }}
-                  className="w-full rounded-xl border border-white/12 bg-white/5 px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-white transition-colors hover:border-white/25 hover:bg-white/10"
+                  className="w-full rounded-xl bg-white/5 px-4 py-3 text-sm font-bold text-white ring-1 ring-white/10 transition-colors hover:bg-rose-500/20 hover:text-rose-300 hover:ring-rose-500/30"
                 >
-                  Logout
+                  Sign Out
                 </button>
               </div>
             ) : (
-              <NavLink to="/auth" onClick={closeMenu} className="block rounded-xl border border-cyan-300/30 bg-cyan-300/12 px-3 py-2 sm:py-2.5 text-center text-xs sm:text-sm font-medium text-white transition-colors hover:border-cyan-300/55 hover:bg-cyan-300/20">
-                Sign In or Create Account
+              <NavLink 
+                to="/auth" 
+                onClick={closeMenu} 
+                className="block w-full rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-4 py-3 text-center text-sm font-bold text-white shadow-lg ring-1 ring-white/20 transition-all hover:brightness-110"
+              >
+                Sign In / Create Account
               </NavLink>
             )}
           </div>
         </div>
-      ) : null}
+      )}
     </header>
   );
 }

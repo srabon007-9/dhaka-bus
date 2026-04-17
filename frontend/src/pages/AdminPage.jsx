@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminLayout from '../layouts/AdminLayout';
 import DataTable from '../components/admin/DataTable';
 import Modal from '../components/common/Modal';
@@ -10,6 +10,17 @@ import useToast from '../hooks/useToast';
 import Toast from '../components/common/Toast';
 import { useAuthContext } from '../contexts/AuthContextValue';
 import PageMotion from '../components/common/PageMotion';
+
+const formatDateTime = (value) => {
+  if (!value) return '-';
+
+  return new Date(value).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
 
 export default function AdminPage() {
   const { token } = useAuthContext();
@@ -33,6 +44,12 @@ export default function AdminPage() {
     total_seats: '40',
   });
   const toast = useToast();
+  const busOverview = useMemo(() => ({
+    busesWithTrips: buses.filter((bus) => bus.next_trip_id).length,
+    totalAvailableSeats: buses.reduce((sum, bus) => sum + Number(bus.available_seats || 0), 0),
+    totalBookedSeats: buses.reduce((sum, bus) => sum + Number(bus.booked_seats || 0), 0),
+    totalOnboardPassengers: buses.reduce((sum, bus) => sum + Number(bus.onboard_passengers || 0), 0),
+  }), [buses]);
 
   const fetchTrips = useCallback(async () => {
     try {
@@ -258,11 +275,38 @@ export default function AdminPage() {
               Add Bus
             </button>
           </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <AdminStatCard label="Buses With Trips" value={busOverview.busesWithTrips} />
+            <AdminStatCard label="Available Seats" value={busOverview.totalAvailableSeats} />
+            <AdminStatCard label="Booked Seats" value={busOverview.totalBookedSeats} />
+            <AdminStatCard label="Passengers Onboard" value={busOverview.totalOnboardPassengers} />
+          </div>
           <DataTable
             columns={[
               { key: 'name', label: 'Bus Name' },
               { key: 'route_name', label: 'Route' },
-              { key: 'capacity', label: 'Seats' },
+              { key: 'capacity', label: 'Bus Seats' },
+              { key: 'next_departure_time', label: 'Next Trip', render: (value) => formatDateTime(value) },
+              {
+                key: 'available_seats',
+                label: 'Available Seats',
+                render: (value) => value ?? '-',
+              },
+              {
+                key: 'booked_seats',
+                label: 'Booked Seats',
+                render: (value) => value ?? 0,
+              },
+              {
+                key: 'passenger_tickets',
+                label: 'Passenger Tickets',
+                render: (value) => value ?? 0,
+              },
+              {
+                key: 'onboard_passengers',
+                label: 'Onboard Now',
+                render: (value) => value ?? 0,
+              },
               { key: 'status', label: 'Status' },
             ]}
             rows={buses}
@@ -327,6 +371,10 @@ export default function AdminPage() {
             { key: 'id', label: 'ID' },
             { key: 'route_name', label: 'Route' },
             { key: 'departure_time', label: 'Departure' },
+            { key: 'total_seats', label: 'Total Seats' },
+            { key: 'booked_seats', label: 'Booked' },
+            { key: 'available_seats', label: 'Available' },
+            { key: 'occupancy_percentage', label: 'Occupancy %', render: (value) => `${value}%` },
             { key: 'status', label: 'Status' },
           ]}
           rows={trips}
@@ -404,5 +452,14 @@ export default function AdminPage() {
 
       <Toast toasts={toast.toasts} removeToast={toast.removeToast} />
     </PageMotion>
+  );
+}
+
+function AdminStatCard({ label, value }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</p>
+      <p className="mt-2 text-3xl font-bold text-white">{value}</p>
+    </div>
   );
 }
