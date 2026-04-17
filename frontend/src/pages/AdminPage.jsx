@@ -4,6 +4,7 @@ import DataTable from '../components/admin/DataTable';
 import Modal from '../components/common/Modal';
 import PaymentVerificationPanel from '../components/admin/PaymentVerificationPanel';
 import PassengerFlowPanel from '../components/admin/PassengerFlowPanel';
+import AnalyticsDashboard from '../components/admin/AnalyticsDashboard';
 import useLiveTracking from '../hooks/useLiveTracking';
 import { busApi, routeApi, tripApi } from '../services/api';
 import useToast from '../hooks/useToast';
@@ -266,6 +267,10 @@ export default function AdminPage() {
   };
 
   const renderPanel = (active) => {
+    if (active === 'Analytics') {
+      return <AnalyticsDashboard trips={trips} buses={buses} routes={routes} />;
+    }
+
     if (active === 'Buses') {
       return (
         <div className="space-y-4">
