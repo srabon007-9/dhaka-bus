@@ -1,67 +1,48 @@
-# Dhaka Bus
+# Dhaka Bus Tracking System 🚌
 
-Dhaka Bus is a student project for real-time bus tracking and ticket booking.
+Hey! Welcome to my Dhaka Bus project. I built this application to try and solve the mess of tracking buses and buying tickets manually in Dhaka. It's a full-stack project built mainly for my university, but it actually has some pretty cool features.
 
-It has:
-- React frontend
-- Node.js and Express backend
-- MySQL database
-- Docker setup for local run on Windows, macOS, and Linux
+It's got a React frontend, an Express/Node.js backend, and uses a real MySQL database. I also set it all up with Docker, so you don't have to waste time installing dependencies one by one.
 
-## Quick start
+## How to get it running on your machine
+
+Just clone the repo and run docker compose. It's super easy:
 
 ```bash
 git clone https://github.com/srabon007-9/dhaka-bus.git
 cd dhaka-bus
-docker compose up --build
+docker compose up --build -d
 ```
 
-Open:
-- App: http://localhost
-- API health: http://localhost:3000/api/health
+Once it's done building (might take a minute the first time), you can open it up:
+- The actual website: http://localhost
+- To check if the backend is alive: http://localhost:3000/api/health
 
-Demo users:
-- Admin: admin@dhakabus.com / admin123
-- User: user@dhakabus.com / user123
+I've already added some dummy accounts you can use to log in:
+- **Admin panel:** admin@dhakabus.com / admin123
+- **Normal user:** user@dhakabus.com / user123
 
-## Main docs
+## Need more help?
 
-- Setup and local development: [SETUP.md](SETUP.md)
-- Database overview and checks: [DATABASE.md](DATABASE.md)
-- Deployment notes: [DEPLOY_FREE.md](DEPLOY_FREE.md)
+I wrote down some more details in these files if you get stuck or want to push this to the cloud:
+- If you're having trouble getting it running locally, read [SETUP.md](SETUP.md).
+- If you want to know how the tables are connected, check out [DATABASE.md](DATABASE.md).
+- If you want to host it for free (like I did for my faculty demo), I made a guide in [DEPLOY_FREE.md](DEPLOY_FREE.md).
 
-## Project structure
+## What's inside the folder?
 
-```text
-dhaka-bus/
-	frontend/          React app
-	backend/           Express API
-	database/          schema, seed, migrations
-	scripts/           helper scripts
-	docker-compose.yml local services
-```
+Here's how I organized the code:
+- `frontend/` - All the React stuff. Uses Vite and Tailwind.
+- `backend/` - The Express API. Connects to the database and handles sockets.
+- `database/` - My raw SQL files and seed data to fill the DB.
+- `docker-compose.yml` - The magic file that links the frontend, backend, and MySQL together.
 
-## Common commands
+## Running into issues?
 
+If things break, usually the easiest fix is just wiping the containers and starting over:
 ```bash
-# start
-docker compose up --build
-
-# stop
-docker compose down
-
-# stop and reset DB volume
 docker compose down -v
+docker compose up --build -d
 ```
 
-## Contributing
-
-1. Create a branch.
-2. Make your changes.
-3. Test locally with Docker.
-4. Open a pull request.
-
-Branch examples:
-- feature/add-ticket-filter
-- bugfix/fix-seat-validation
-- docs/update-setup
+If you want to add a feature or fix a bug, feel free to make a branch and open a PR! Just make sure to test it locally with Docker first so it doesn't break the main branch.
