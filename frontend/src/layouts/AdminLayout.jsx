@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import Sidebar from '../components/Sidebar';
 
-const sections = ['Buses', 'Routes', 'Trips', 'Payments', 'Passenger Flow'];
+const sections = ['Analytics', 'Buses', 'Routes', 'Trips', 'Payments', 'Passenger Flow'];
 
 export default function AdminLayout({ children }) {
-  const [active, setActive] = useState('Buses');
+  const [active, setActive] = useState('Analytics');
 
   return (
     <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
