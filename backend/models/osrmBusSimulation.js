@@ -184,9 +184,6 @@ async function fetchRoutedGeometry(waypoints) {
   return geometry;
 }
 
-/**
- * Fetch route geometry from OSRM (match first, route fallback)
- */
 async function fetchOSRMGeometry() {
   // Keep stop coordinates exact and avoid heavy nearest lookups in backend startup path.
   const cleanedWaypoints = removeConsecutiveDuplicates(FIXED_STOPS);
@@ -201,9 +198,14 @@ async function fetchOSRMGeometry() {
     return matchedGeometry;
   } catch (matchError) {
     console.warn(`⚠️  OSRM match failed: ${matchError.message}`);
-    const routedGeometry = await fetchRoutedGeometry(cleanedWaypoints);
-    console.log('🧭 OSRM geometry source: route (fallback)');
-    return routedGeometry;
+    try {
+      const routedGeometry = await fetchRoutedGeometry(cleanedWaypoints);
+      console.log('🧭 OSRM geometry source: route (fallback)');
+      return routedGeometry;
+    } catch (routeError) {
+      console.warn(`⚠️  OSRM route failed: ${routeError.message}, falling back to direct lines`);
+      return cleanedWaypoints;
+    }
   }
 }
 

@@ -17,7 +17,7 @@ export default function DataTable({ columns, rows, onDelete, onEdit }) {
             <tr key={row.id || index} className="border-t border-white/10 text-slate-100">
               {columns.map((column) => (
                 <td key={column.key} className="px-4 py-3">
-                  {row[column.key] ?? '-'}
+                  {column.render ? column.render(row[column.key]) : row[column.key] ?? '-'}
                 </td>
               ))}
               <td className="px-4 py-3">
