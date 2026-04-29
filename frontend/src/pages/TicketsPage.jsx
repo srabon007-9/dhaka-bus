@@ -23,12 +23,13 @@ const parseSeatNumbers = (value) => {
 };
 
 export default function TicketsPage() {
-  const { token } = useAuthContext();
+  const { token, user } = useAuthContext();
   const toast = useToast();
   const [activeTab, setActiveTab] = useState('active');
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const isAdmin = user?.role === 'admin';
 
   const fetchTickets = useCallback(async () => {
     setLoading(true);
@@ -66,8 +67,10 @@ export default function TicketsPage() {
     <PageMotion>
     <section className="space-y-6">
       <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-        <h2 className="text-2xl font-semibold text-white">Ticket Management</h2>
-        <p className="mt-1 text-sm text-slate-300">View active bookings and ticket history.</p>
+        <h2 className="text-2xl font-semibold text-white">{isAdmin ? 'All Tickets' : 'My Tickets'}</h2>
+        <p className="mt-1 text-sm text-slate-300">
+          {isAdmin ? 'View active bookings and ticket history across all passengers.' : 'View your active bookings and ticket history.'}
+        </p>
         <div className="mt-4 flex gap-3">
           <button
             type="button"
@@ -92,7 +95,7 @@ export default function TicketsPage() {
       {!loading && !error && data.length === 0 ? (
         <EmptyState
           title={activeTab === 'active' ? 'No active bookings' : 'No ticket history'}
-          description="Tickets will appear here after booking."
+          description={isAdmin ? 'Passenger tickets will appear here once bookings are created.' : 'Tickets will appear here after booking.'}
           icon="🎫"
         />
       ) : (

@@ -8,11 +8,6 @@ const publicLinks = [
   { to: '/tracking', label: 'Live Tracking' },
 ];
 
-const privateLinks = [
-  { to: '/booking', label: 'Book Tickets' },
-  { to: '/tickets', label: 'My Tickets' },
-];
-
 const desktopLinkClassName = ({ isActive }) => [
   'group relative inline-flex items-center rounded-full px-5 py-2 text-sm font-semibold tracking-wide transition-all duration-300',
   isActive
@@ -101,6 +96,11 @@ export default function Navbar() {
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, [lastScrollY]);
+
+  const privateLinks = [
+    { to: '/booking', label: 'Book Tickets' },
+    { to: '/tickets', label: user?.role === 'admin' ? 'All Tickets' : 'My Tickets' },
+  ];
 
   const links = [
     ...publicLinks,
