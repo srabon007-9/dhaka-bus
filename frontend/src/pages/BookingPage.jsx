@@ -50,6 +50,7 @@ export default function BookingPage() {
   const { routes, loading: routesLoading, error: routesError, retry } = useLiveTracking();
   const { token, user } = useAuthContext();
   const toast = useToast();
+  const isAdmin = String(user?.role || '').trim().toLowerCase() === 'admin';
 
   const [step, setStep] = useState(0);
   const [route, setRoute] = useState(null);
@@ -88,10 +89,13 @@ export default function BookingPage() {
     [bookedSeats, seats]
   );
   const availableRoutes = useMemo(
-    () => routes.filter((item) => (item.stops?.length || 0) >= 2),
+    () => routes.filter((item) => !Array.isArray(item.stops) || item.stops.length >= 2),
     [routes]
   );
-  const hiddenIncompleteRouteCount = routes.length - availableRoutes.length;
+  const hiddenIncompleteRouteCount = useMemo(
+    () => routes.filter((item) => Array.isArray(item.stops) && item.stops.length < 2).length,
+    [routes]
+  );
 
   const totalPrice = (segmentPrice * selectedSeats.length).toFixed(2);
   const selectedSeatLabels = selectedSeats.map((seat) => `S${seat}`).join(', ');
@@ -193,6 +197,9 @@ export default function BookingPage() {
     try {
       const routeStops = await stopApi.listByRoute(routeItem.id);
       setStops(routeStops);
+      if (routeStops.length < 2) {
+        setStopsError('This route is not ready for booking yet. It needs at least two configured stops.');
+      }
     } catch {
       setStopsError('Could not load stops for this route.');
     } finally {
@@ -509,35 +516,73 @@ export default function BookingPage() {
               )}
 
               {!tripLoading && !tripError && tripOptions.length > 0 && (
-                <div className="mt-6 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                <div className="mt-6 grid gap-4 md:grid-cols-2">
                   {tripOptions.map((item) => (
                     <button
                       key={item.id}
                       onClick={() => handleBusSelect(item)}
                       type="button"
-                      className="group rounded-3xl border border-white/8 bg-white/3 p-4 text-left transition-all hover:border-emerald-300/30 hover:bg-emerald-500/8"
+                      className="group relative overflow-hidden rounded-[30px] border border-cyan-400/10 bg-[linear-gradient(160deg,rgba(15,23,42,0.95),rgba(6,14,30,0.92))] p-5 text-left shadow-[0_18px_45px_rgba(2,6,23,0.18)] transition-all duration-200 hover:-translate-y-1 hover:border-cyan-300/30 hover:shadow-[0_24px_60px_rgba(8,145,178,0.18)]"
                     >
-                      <div className="flex items-start justify-between gap-2">
+                      <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.16),transparent_42%)] opacity-80" />
+
+                      <div className="relative flex items-start justify-between gap-4">
                         <div>
-                          <p className="text-xs font-bold uppercase tracking-wider text-emerald-300">Bus</p>
-                          <p className="mt-1 font-bold text-slate-100">{item.bus_name || `Bus ${item.bus_id}`}</p>
+                          <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/15 bg-cyan-400/10 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.28em] text-cyan-200">
+                            <span className="text-sm leading-none">🚌</span>
+                            Bus
+                          </div>
+                          <p className="mt-4 text-xl font-black tracking-[-0.03em] text-slate-50">
+                            {item.bus_name || `Bus ${item.bus_id}`}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-400">
+                            {boardingStop?.stop_name} to {dropoffStop?.stop_name}
+                          </p>
                         </div>
-                        <span className="rounded-full bg-emerald-500/20 px-2 py-1 text-xs font-bold text-emerald-200">
+                        <span className="rounded-full border border-emerald-400/15 bg-emerald-400/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.24em] text-emerald-200">
                           {item.total_seats} seats
                         </span>
                       </div>
-                      <div className="mt-3 space-y-2 text-sm text-slate-400">
-                        <div className="flex justify-between">
-                          <span>Departs</span>
-                          <span className="font-semibold text-slate-200">{formatTime(item.departure_time)}</span>
+
+                      <div className="relative mt-6 grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3">
+                          <div className="text-[0.68rem] font-bold uppercase tracking-[0.28em] text-slate-500">
+                            Departs
+                          </div>
+                          <div className="mt-2 text-xl font-black tracking-[-0.04em] text-slate-50">
+                            {formatTime(item.departure_time)}
+                          </div>
                         </div>
-                        <div className="flex justify-between">
-                          <span>Price/seat</span>
-                          <span className="font-semibold text-emerald-300">৳{calculateSegmentPrice(item, boardingStop, dropoffStop, stops)}</span>
+                        <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3">
+                          <div className="text-[0.68rem] font-bold uppercase tracking-[0.28em] text-slate-500">
+                            Fare
+                          </div>
+                          <div className="mt-2 text-xl font-black tracking-[-0.04em] text-emerald-300">
+                            ৳{calculateSegmentPrice(item, boardingStop, dropoffStop, stops)}
+                          </div>
+                        </div>
+                        <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3">
+                          <div className="text-[0.68rem] font-bold uppercase tracking-[0.28em] text-slate-500">
+                            Status
+                          </div>
+                          <div className="mt-2 text-sm font-bold uppercase tracking-[0.24em] text-cyan-100">
+                            Ready to board
+                          </div>
                         </div>
                       </div>
-                      <div className="mt-3 text-center text-xs font-semibold text-emerald-200 opacity-0 transition-opacity group-hover:opacity-100">
-                        Click to select seats
+
+                      <div className="relative mt-5 flex items-center justify-between rounded-[24px] border border-white/8 bg-slate-950/45 px-4 py-3">
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-[0.24em] text-slate-500">
+                            Next step
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-slate-200">
+                            Open seat map and pick your seats
+                          </p>
+                        </div>
+                        <span className="flex h-11 w-11 items-center justify-center rounded-full border border-cyan-300/20 bg-cyan-400/10 text-lg text-cyan-100 transition-transform duration-200 group-hover:translate-x-1">
+                          →
+                        </span>
                       </div>
                     </button>
                   ))}
@@ -546,15 +591,38 @@ export default function BookingPage() {
 
               {/* Seat Selection Modal */}
               {seatModalOpen && trip && (
-                <Modal isOpen={seatModalOpen} onClose={() => setSeatModalOpen(false)} title={`Select Seats - ${trip.bus_name || `Bus ${trip.bus_id}`}`}>
+                <Modal
+                  align="top"
+                  size="wide"
+                  isOpen={seatModalOpen}
+                  onClose={() => setSeatModalOpen(false)}
+                  title={`Select Seats - ${trip.bus_name || `Bus ${trip.bus_id}`}`}
+                >
                   <div className="space-y-6">
                     <SeatSelector seats={seatsWithStatus} selected={selectedSeats} onToggle={onToggleSeat} />
                     <div className="border-t border-white/10 pt-6">
-                      <div className="mb-4 flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3">
-                        <span className="text-sm font-semibold text-slate-300">Selected seats: {selectedSeats.length}</span>
-                        <span className="text-lg font-bold text-emerald-300">৳{(segmentPrice * selectedSeats.length).toFixed(2)}</span>
+                      <div className="mb-4 flex flex-col gap-3 rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-[0.72rem] font-bold uppercase tracking-[0.28em] text-slate-500">
+                            Current selection
+                          </p>
+                          <p className="mt-2 text-lg font-black tracking-[-0.03em] text-slate-50">
+                            {selectedSeats.length === 0 ? 'No seats selected yet' : `${selectedSeats.length} seat${selectedSeats.length === 1 ? '' : 's'} selected`}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-400">
+                            {selectedSeats.length === 0 ? 'Choose seats from the map above to continue.' : selectedSeats.map((seat) => `S${seat}`).join(', ')}
+                          </p>
+                        </div>
+                        <div className="rounded-[22px] border border-emerald-400/15 bg-emerald-400/10 px-4 py-3 text-right">
+                          <p className="text-[0.68rem] font-bold uppercase tracking-[0.28em] text-emerald-100/80">
+                            Total
+                          </p>
+                          <p className="mt-2 text-2xl font-black tracking-[-0.04em] text-emerald-300">
+                            ৳{(segmentPrice * selectedSeats.length).toFixed(2)}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col gap-2 sm:flex-row">
                         <button
                           onClick={confirmSeatsAndContinue}
                           disabled={selectedSeats.length === 0}
@@ -726,7 +794,7 @@ export default function BookingPage() {
                       Book Another Trip
                     </button>
                     <button onClick={() => navigate('/tickets')} className="btn-secondary">
-                      View My Tickets
+                      {isAdmin ? 'View All Tickets' : 'View My Tickets'}
                     </button>
                   </div>
                 </div>

@@ -1,6 +1,7 @@
 const db = require('../config/database');
 const crypto = require('crypto');
 const { rethrowIfMissingTable } = require('./tableDependencyError');
+const bookingRequestModel = require('./bookingRequestModel');
 
 class ManualPaymentModel {
   /**
@@ -10,24 +11,22 @@ class ManualPaymentModel {
     paymentMethod,
     amount,
     currency,
-    bookingPayload,
-    userId,
+    bookingRequestId,
   }) {
     const paymentId = this.generatePaymentId();
     const sql = `
       INSERT INTO manual_payments 
-      (payment_id, user_id, amount, currency, payment_method, booking_payload, status)
-      VALUES (?, ?, ?, ?, ?, ?, 'pending')
+      (payment_id, booking_request_id, amount, currency, payment_method, status)
+      VALUES (?, ?, ?, ?, ?, 'pending')
     `;
 
     try {
-      const [result] = await db.query(sql, [
+      await db.query(sql, [
         paymentId,
-        userId,
+        bookingRequestId,
         amount,
         currency,
         paymentMethod,
-        JSON.stringify(bookingPayload),
       ]);
 
       return paymentId;
@@ -47,16 +46,11 @@ class ManualPaymentModel {
       if (rows.length === 0) return null;
 
       const payment = rows[0];
+      const bookingRequest = await bookingRequestModel.getBookingRequestById(payment.booking_request_id);
+
       return {
         ...payment,
-        booking_payload:
-          typeof payment.booking_payload === 'string'
-            ? JSON.parse(payment.booking_payload)
-            : payment.booking_payload,
-        payment_details:
-          typeof payment.payment_details === 'string'
-            ? JSON.parse(payment.payment_details)
-            : payment.payment_details,
+        booking_request: bookingRequest,
       };
     } catch (error) {
       console.error('Error retrieving manual payment:', error.message);
@@ -69,20 +63,19 @@ class ManualPaymentModel {
    */
   static async getPendingPaymentsByUserId(userId, limit = 10) {
     const sql = `
-      SELECT * FROM manual_payments 
-      WHERE user_id = ? AND status = 'pending' AND expires_at > NOW()
+      SELECT mp.*
+      FROM manual_payments mp
+      JOIN booking_requests br ON br.id = mp.booking_request_id
+      WHERE br.user_id = ? AND mp.status = 'pending' AND mp.expires_at > NOW()
       ORDER BY created_at DESC 
       LIMIT ?
     `;
     try {
       const [rows] = await db.query(sql, [userId, limit]);
-      return rows.map((payment) => ({
+      return Promise.all(rows.map(async (payment) => ({
         ...payment,
-        booking_payload:
-          typeof payment.booking_payload === 'string'
-            ? JSON.parse(payment.booking_payload)
-            : payment.booking_payload,
-      }));
+        booking_request: await bookingRequestModel.getBookingRequestById(payment.booking_request_id),
+      })));
     } catch (error) {
       console.error('Error retrieving pending payments:', error.message);
       rethrowIfMissingTable(error, 'manual_payments');
@@ -103,7 +96,8 @@ class ManualPaymentModel {
           ELSE mp.status
         END AS admin_status
       FROM manual_payments mp
-      LEFT JOIN users u ON mp.user_id = u.id
+      LEFT JOIN booking_requests br ON br.id = mp.booking_request_id
+      LEFT JOIN users u ON br.user_id = u.id
       WHERE mp.status = 'pending'
       ORDER BY mp.created_at DESC 
       LIMIT ?
@@ -139,16 +133,15 @@ class ManualPaymentModel {
   /**
    * Mark payment as completed (after ticket creation)
    */
-  static async markPaymentCompleted(paymentId, paymentDetails = null) {
+  static async markPaymentCompleted(paymentId) {
     const sql = `
       UPDATE manual_payments 
-      SET status = 'completed', payment_details = ?
+      SET status = 'completed'
       WHERE payment_id = ?
     `;
 
     try {
-      const serializedPaymentDetails = paymentDetails ? JSON.stringify(paymentDetails) : null;
-      const [result] = await db.query(sql, [serializedPaymentDetails, paymentId]);
+      const [result] = await db.query(sql, [paymentId]);
       return result.affectedRows > 0;
     } catch (error) {
       console.error('Error marking payment completed:', error.message);

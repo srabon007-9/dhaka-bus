@@ -1,6 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const ticketModel = require('../models/ticketModel');
+const bookingRequestModel = require('../models/bookingRequestModel');
 const nagadPaymentModel = require('../models/nagadPaymentModel');
 const manualPaymentModel = require('../models/manualPaymentModel');
 const passengerFlowModel = require('../models/passengerFlowModel');
@@ -66,130 +67,71 @@ const buildTicketResponse = (ticket) => ({
   departure_time: ticket.departure_time,
   boarding_stop_name: ticket.boarding_stop_name,
   dropoff_stop_name: ticket.dropoff_stop_name,
-  seat_numbers: (() => {
-    if (Array.isArray(ticket.seat_numbers)) return ticket.seat_numbers;
-    if (typeof ticket.seat_numbers === 'string') {
-      try {
-        return JSON.parse(ticket.seat_numbers);
-      } catch {
-        return [];
-      }
-    }
-    return [];
-  })(),
+  seat_numbers: Array.isArray(ticket.seat_numbers)
+    ? ticket.seat_numbers
+    : Array.isArray(ticket.passenger_details)
+      ? ticket.passenger_details
+          .map((seat) => Number(seat.seat_number))
+          .filter((seat) => Number.isInteger(seat) && seat > 0)
+      : [],
   total_price: ticket.total_price,
   passenger_name: ticket.passenger_name,
   passenger_details: Array.isArray(ticket.passenger_details) ? ticket.passenger_details : [],
   status: ticket.status,
 });
 
-const parseStoredBookingPayload = (value) => {
-  if (!value) return null;
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value);
-    } catch {
-      return null;
-    }
+const normalizeBookingSeats = (payload, quote) => {
+  if (Array.isArray(payload.passenger_details) && payload.passenger_details.length > 0) {
+    return payload.passenger_details.map((detail) => ({
+      seat_number: Number(detail.seat_number),
+      passenger_name: String(detail.passenger_name || detail.name || '').trim(),
+    }));
   }
-  return value;
+
+  return quote.seat_numbers.map((seat) => ({
+    seat_number: Number(seat),
+    passenger_name: payload.passenger_name,
+  }));
 };
 
-const parseStoredPaymentDetails = (value) => {
-  if (!value) return null;
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value);
-    } catch {
-      return null;
-    }
-  }
-  return value;
-};
+const createBookingRequestFromPayload = async ({ payload, quote, userId }) => (
+  bookingRequestModel.createBookingRequest({
+    userId,
+    tripId: payload.trip_id,
+    boardingStopId: payload.boarding_stop_id,
+    dropoffStopId: payload.dropoff_stop_id,
+    totalPrice: quote.total_price,
+    currency: PAYMENT_CURRENCY,
+    passengerDetails: normalizeBookingSeats(payload, quote),
+  })
+);
 
-const normalizeSeatList = (value) => {
-  const source = Array.isArray(value)
-    ? value
-    : typeof value === 'string'
-      ? (() => {
-          try {
-            return JSON.parse(value);
-          } catch {
-            return [];
-          }
-        })()
-      : [];
-
-  return source
-    .map((seat) => Number(seat))
-    .filter((seat) => Number.isInteger(seat) && seat > 0)
-    .sort((left, right) => left - right);
-};
-
-const seatListsMatch = (left, right) => {
-  const normalizedLeft = normalizeSeatList(left);
-  const normalizedRight = normalizeSeatList(right);
-
-  return normalizedLeft.length === normalizedRight.length
-    && normalizedLeft.every((seat, index) => seat === normalizedRight[index]);
-};
-
-const findTicketForManualPayment = async ({ payment, fallbackUserId }) => {
-  const paymentDetails = parseStoredPaymentDetails(payment.payment_details);
-  const completedTicketId = Number(paymentDetails?.ticket_id);
-  if (completedTicketId) {
-    return ticketModel.getTicketById(completedTicketId);
-  }
-
-  const bookingPayload = parseStoredBookingPayload(payment.booking_payload);
-  if (!bookingPayload) {
-    return null;
-  }
-
-  const userId = Number(payment.user_id || bookingPayload.user_id || fallbackUserId);
-  if (!userId) {
-    return null;
-  }
-
-  const tickets = await ticketModel.getTicketsByUserId(userId);
-  return tickets.find((ticket) => (
-    Number(ticket.trip_id) === Number(bookingPayload.trip_id)
-    && Number(ticket.boarding_stop_id) === Number(bookingPayload.boarding_stop_id)
-    && Number(ticket.dropoff_stop_id) === Number(bookingPayload.dropoff_stop_id)
-    && seatListsMatch(ticket.seat_numbers, bookingPayload.seat_numbers)
-  )) || null;
-};
-
-const findTicketForNagadPayment = async ({ payment, fallbackUserId }) => {
-  const bookingPayload = parseStoredBookingPayload(payment.booking_payload);
-  if (!bookingPayload) {
-    return null;
-  }
-
-  const userId = Number(payment.user_id || bookingPayload.user_id || fallbackUserId);
-  if (!userId) {
-    return null;
-  }
-
-  const tickets = await ticketModel.getTicketsByUserId(userId);
-  return tickets.find((ticket) => (
-    Number(ticket.trip_id) === Number(bookingPayload.trip_id)
-    && Number(ticket.boarding_stop_id) === Number(bookingPayload.boarding_stop_id)
-    && Number(ticket.dropoff_stop_id) === Number(bookingPayload.dropoff_stop_id)
-    && seatListsMatch(ticket.seat_numbers, bookingPayload.seat_numbers)
-  )) || null;
-};
+const buildBookingRequestPayload = (bookingRequest) => ({
+  user_id: bookingRequest.user_id,
+  trip_id: bookingRequest.trip_id,
+  boarding_stop_id: bookingRequest.boarding_stop_id,
+  dropoff_stop_id: bookingRequest.dropoff_stop_id,
+  seat_numbers: Array.isArray(bookingRequest.seat_numbers) ? bookingRequest.seat_numbers : [],
+  passenger_name: bookingRequest.passenger_name || '',
+  passenger_details: Array.isArray(bookingRequest.passenger_details) ? bookingRequest.passenger_details : [],
+});
 
 const finalizeManualPaymentTicket = async ({ payment, paymentId, userForEmail }) => {
-  const bookingPayload = parseStoredBookingPayload(payment.booking_payload);
-  if (!bookingPayload) {
-    const error = new Error('Stored booking payload is invalid');
+  const bookingRequest = payment.booking_request;
+  if (!bookingRequest) {
+    const error = new Error('Stored booking request is invalid');
     error.statusCode = 500;
     throw error;
   }
 
-  const ticket = await ticketModel.reserveTicket(bookingPayload);
-  await manualPaymentModel.markPaymentCompleted(paymentId, { ticket_id: ticket.id });
+  const existingTicketId = Number(bookingRequest.ticket_id);
+  const existingTicket = existingTicketId ? await ticketModel.getTicketById(existingTicketId) : null;
+  const ticket = existingTicket || await ticketModel.reserveTicket(buildBookingRequestPayload(bookingRequest));
+
+  if (!existingTicket) {
+    await bookingRequestModel.markBookingRequestFulfilled(bookingRequest.id, ticket.id);
+  }
+  await manualPaymentModel.markPaymentCompleted(paymentId);
 
   const savedTicket = await ticketModel.getTicketById(ticket.id);
   const builtTicket = buildTicketResponse(savedTicket || ticket);
@@ -224,7 +166,7 @@ const finalizePaidSession = async ({ paymentRefId, enforceUserId }) => {
     throw error;
   }
 
-  if (enforceUserId && Number(nagadPayment.user_id) !== Number(enforceUserId)) {
+  if (enforceUserId && Number(nagadPayment.booking_request?.user_id) !== Number(enforceUserId)) {
     const error = new Error('You are not allowed to complete this payment');
     error.statusCode = 403;
     throw error;
@@ -236,8 +178,14 @@ const finalizePaidSession = async ({ paymentRefId, enforceUserId }) => {
     throw error;
   }
 
-  const paymentDetails = parseStoredPaymentDetails(nagadPayment.payment_details) || {};
-  const existingTicketId = Number(paymentDetails.ticket_id);
+  const bookingRequest = nagadPayment.booking_request;
+  if (!bookingRequest) {
+    const error = new Error('Stored booking request is invalid');
+    error.statusCode = 500;
+    throw error;
+  }
+
+  const existingTicketId = Number(bookingRequest.ticket_id);
   if (existingTicketId) {
     const existingTicket = await ticketModel.getTicketById(existingTicketId);
     if (existingTicket) {
@@ -248,34 +196,8 @@ const finalizePaidSession = async ({ paymentRefId, enforceUserId }) => {
     }
   }
 
-  const relatedTicket = await findTicketForNagadPayment({
-    payment: nagadPayment,
-    fallbackUserId: enforceUserId,
-  });
-  if (relatedTicket) {
-    await nagadPaymentModel.markPaymentCompleted(paymentRefId, {
-      ...paymentDetails,
-      ticket_id: relatedTicket.id,
-    });
-
-    return {
-      alreadyConfirmed: true,
-      ticket: buildTicketResponse(relatedTicket),
-    };
-  }
-
-  const bookingPayload = parseStoredBookingPayload(nagadPayment.booking_payload);
-  if (!bookingPayload) {
-    const error = new Error('Stored booking payload is invalid');
-    error.statusCode = 500;
-    throw error;
-  }
-
-  const ticket = await ticketModel.reserveTicket(bookingPayload);
-  await nagadPaymentModel.markPaymentCompleted(paymentRefId, {
-    ...paymentDetails,
-    ticket_id: ticket.id,
-  });
+  const ticket = await ticketModel.reserveTicket(buildBookingRequestPayload(bookingRequest));
+  await bookingRequestModel.markBookingRequestFulfilled(bookingRequest.id, ticket.id);
 
   const savedTicket = await ticketModel.getTicketById(ticket.id);
   return {
@@ -324,6 +246,11 @@ router.post('/payment/checkout', verifyToken, async (req, res) => {
     }
 
     const quote = await ticketModel.getBookingQuote(payload);
+    const bookingRequest = await createBookingRequestFromPayload({
+      payload,
+      quote,
+      userId: req.user.id,
+    });
 
     // ============ MANUAL PAYMENT MODE ============
     if (PAYMENT_MODE.includes('manual')) {
@@ -331,16 +258,7 @@ router.post('/payment/checkout', verifyToken, async (req, res) => {
         paymentMethod: PAYMENT_MODE === 'manual-both' ? 'both' : PAYMENT_MODE.replace('manual-', ''),
         amount: quote.total_price,
         currency: PAYMENT_CURRENCY,
-        bookingPayload: {
-          user_id: req.user.id,
-          trip_id: payload.trip_id,
-          boarding_stop_id: payload.boarding_stop_id,
-          dropoff_stop_id: payload.dropoff_stop_id,
-          seat_numbers: quote.seat_numbers,
-          passenger_name: payload.passenger_name,
-          passenger_details: payload.passenger_details,
-        },
-        userId: req.user.id,
+        bookingRequestId: bookingRequest.id,
       });
 
       const paymentMethods = [];
@@ -402,16 +320,7 @@ router.post('/payment/checkout', verifyToken, async (req, res) => {
       merchantId: NAGAD_MERCHANT_ID,
       amount: quote.total_price,
       currency: PAYMENT_CURRENCY,
-      bookingPayload: {
-        user_id: req.user.id,
-        trip_id: payload.trip_id,
-        boarding_stop_id: payload.boarding_stop_id,
-        dropoff_stop_id: payload.dropoff_stop_id,
-        seat_numbers: quote.seat_numbers,
-        passenger_name: payload.passenger_name,
-        passenger_details: payload.passenger_details,
-      },
-      userId: req.user.id,
+      bookingRequestId: bookingRequest.id,
     });
 
     const nagadPayload = {
@@ -521,8 +430,19 @@ router.post('/payment/nagad/callback', async (req, res) => {
 
       // Finalize the ticket booking
       try {
-        const bookingPayload = nagadPayment.booking_payload;
-        const ticket = await ticketModel.reserveTicket(bookingPayload);
+        const bookingRequest = nagadPayment.booking_request;
+        if (!bookingRequest) {
+          throw new Error('Stored booking request is invalid');
+        }
+
+        const existingTicketId = Number(bookingRequest.ticket_id);
+        const existingTicket = existingTicketId ? await ticketModel.getTicketById(existingTicketId) : null;
+        const ticket = existingTicket || await ticketModel.reserveTicket(buildBookingRequestPayload(bookingRequest));
+
+        if (!existingTicket) {
+          await bookingRequestModel.markBookingRequestFulfilled(bookingRequest.id, ticket.id);
+        }
+
         return res.json({
           success: true,
           message: 'Payment successful and ticket booked',
@@ -563,7 +483,7 @@ router.get('/payment/status/:paymentRef', verifyToken, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Payment not found' });
     }
 
-    if (nagadPayment.user_id !== Number(req.user.id)) {
+    if (Number(nagadPayment.booking_request?.user_id) !== Number(req.user.id)) {
       return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
 
@@ -754,7 +674,7 @@ router.post('/payment/manual/complete', verifyToken, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Payment not found' });
     }
 
-    if (payment.user_id !== req.user.id) {
+    if (Number(payment.booking_request?.user_id) !== Number(req.user.id)) {
       return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
 
@@ -778,10 +698,10 @@ router.post('/payment/manual/complete', verifyToken, async (req, res) => {
     }
 
     if (payment.status === 'completed') {
-      const completedTicket = await findTicketForManualPayment({
-        payment,
-        fallbackUserId: req.user.id,
-      });
+      const completedTicketId = Number(payment.booking_request?.ticket_id);
+      const completedTicket = completedTicketId
+        ? await ticketModel.getTicketById(completedTicketId)
+        : null;
 
       return res.status(200).json({
         success: true,
@@ -821,7 +741,7 @@ router.get('/payment/manual/:paymentId', verifyToken, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Payment not found' });
     }
 
-    if (payment.user_id !== req.user.id) {
+    if (Number(payment.booking_request?.user_id) !== Number(req.user.id)) {
       return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
 
@@ -913,7 +833,7 @@ router.post('/admin/payments/:paymentId/verify', verifyToken, async (req, res) =
       }
     }
 
-    const ticketUser = await userModel.getUserById(payment.user_id);
+    const ticketUser = await userModel.getUserById(payment.booking_request?.user_id);
     if (!ticketUser) {
       return res.status(404).json({ success: false, message: 'Ticket owner user not found' });
     }

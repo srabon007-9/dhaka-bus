@@ -1,50 +1,131 @@
-# The Database Setup 🗄️
+# Database Guide
 
-Since this is a database-focused project, I spent a lot of time making sure the MySQL architecture is solid. It's not just a flat list of JSONs; it's a real relational database with proper foreign keys, indexing, and everything else you'd expect in a production app.
+This project uses MySQL as the main database. The database stores routes, buses, live locations, users, trips, tickets, payments, and passenger flow records.
 
-## What are we actually storing?
+The goal of this file is to explain the database clearly, so a reader can understand both the big picture and the important details.
 
-Here are the main tables I set up:
-- `routes`, `bus_stops`, and `route_waypoints` (handles all the mapping and pathing data)
-- `buses` and `locations` (live tracking coordinates)
-- `users`, `trips`, `tickets`, and `ticket_seats` (the whole booking engine)
-- `manual_payments`, `nagad_payments`, and `payment_sessions` (handles the money stuff)
-- `passenger_events` (analytics)
+## Database overview
 
-How everything connects:
-- A route has many buses, and buses spam location data.
-- Trips belong to routes, and users buy tickets for those trips.
-- Every ticket locks down specific rows in the `ticket_seats` table.
+The database is relational. That means the main parts of the system are stored in separate tables and connected with foreign keys.
 
-## Why I'm proud of this database structure
+In simple terms:
 
-I didn't just throw this together. Here's why it's a "real" database project:
-- Every table has a proper primary key.
-- I used strict foreign key constraints. If an admin deletes a trip, it automatically handles the cascading so we don't end up with ghost tickets.
-- I indexed the columns we query the most (like bus locations and trip dates) so the dashboard stays fast.
-- I separated the payment logic from the ticketing logic so it's clean and scalable.
+- routes define where buses travel
+- buses belong to routes
+- trips represent scheduled journeys
+- users book seats on trips
+- tickets store bookings
+- payment tables store payment-related data
+- passenger flow tables track boarding and drop-off events
 
-## Getting the database running locally
+## Main table groups
 
-If you just cloned the repo and want to test it, don't worry about manually creating tables. 
-When you run Docker for the very first time, it automatically reads my `database/schema.sql` and `database/seed.sql` files and sets up everything for you.
+### 1. Route and map data
 
-Just run:
+- `routes`: basic route information
+- `bus_stops`: stops for each route, including stop order
+- `route_waypoints`: route path points between stops
+
+These tables define where a bus goes and in what order passengers travel along a route.
+
+### 2. Bus tracking data
+
+- `buses`: bus records, capacity, and status
+- `locations`: live or simulated location history for each bus
+
+This part powers the tracking feature.
+
+### 3. User and authentication data
+
+- `users`: user accounts and roles
+- `password_reset_tokens`: password reset support
+
+The `users` table stores both normal users and admins.
+
+### 4. Booking data
+
+- `trips`: scheduled journeys for a bus on a route
+- `tickets`: main booking records
+- `ticket_seats`: per-seat passenger details for a ticket
+
+This is the heart of the booking system.
+
+### 5. Payment data
+
+- `manual_payments`: manual payment attempts such as bKash or Nagad
+- `nagad_payments`: Nagad payment records
+- `payment_sessions`: checkout and payment session records
+
+These tables are kept separate from the main ticket data to keep the system easier to manage.
+
+### 6. Passenger flow data
+
+- `passenger_events`: boarding and alighting records by stop
+
+This supports tracking passenger movement during trips.
+
+## Important relationships
+
+Here are the main connections in plain language:
+
+- one route can have many stops
+- one route can have many buses
+- one bus can have many location records
+- one route can have many trips
+- one trip belongs to one bus and one route
+- one user can have many tickets
+- one ticket can have many seat records in `ticket_seats`
+- one ticket can also have many passenger events
+
+## Why the structure is useful
+
+This database design helps the project in a few important ways:
+
+- data is organized by responsibility
+- related records are connected with foreign keys
+- common queries can run faster because of indexes
+- booking, payment, and tracking logic stay separate
+
+## Schema source files
+
+The database is created from:
+
+- `database/schema.sql`
+- `database/seed.sql`
+
+Extra changes over time are stored in:
+
+- `database/migrations/`
+
+There is also a helper script for applying migrations:
+
+- `scripts/apply_migrations.sh`
+
+## Running the database locally
+
+If you start the project with Docker:
+
 ```bash
 docker compose up --build -d
 ```
 
-If you messed up the data while testing and just want to reset everything back to a clean state, you can nuke the Docker volume like this:
+the MySQL container will create the schema automatically on first run.
+
+## Resetting the database
+
+If you want to delete all local data and start over:
+
 ```bash
 docker compose down -v
 docker compose up --build -d
 ```
 
-## Useful Commands
+Use this only when you are okay with losing the current local database contents.
 
-If you want to poke around the database while it's running, here are some commands I use a lot. You can just copy-paste these into your terminal.
+## Useful SQL commands
 
-See how many rows are in the main tables:
+### Count rows in key tables
+
 ```bash
 docker exec dhaka-bus-mysql mysql -u root -ppassword dhaka_bus -e \
 "SELECT 'routes' AS tbl, COUNT(*) AS cnt FROM routes UNION ALL
@@ -56,7 +137,8 @@ docker exec dhaka-bus-mysql mysql -u root -ppassword dhaka_bus -e \
  SELECT 'tickets', COUNT(*) FROM tickets;"
 ```
 
-Check the live GPS pings coming in:
+### View recent bus location data
+
 ```bash
 docker exec dhaka-bus-mysql mysql -u root -ppassword dhaka_bus -e \
 "SELECT bus_id, ROUND(latitude, 5) AS lat, ROUND(longitude, 5) AS lng, speed_kmh, timestamp
@@ -65,7 +147,8 @@ docker exec dhaka-bus-mysql mysql -u root -ppassword dhaka_bus -e \
  LIMIT 10;"
 ```
 
-See who just bought tickets:
+### View recent ticket records
+
 ```bash
 docker exec dhaka-bus-mysql mysql -u root -ppassword dhaka_bus -e \
 "SELECT id, user_id, trip_id, total_price, status, created_at
@@ -74,4 +157,24 @@ docker exec dhaka-bus-mysql mysql -u root -ppassword dhaka_bus -e \
  LIMIT 20;"
 ```
 
-**Quick note:** The default MySQL container is named `dhaka-bus-mysql`. If you run into port conflicts (like if you already have MySQL running on your laptop), you can change the port mapping in the `docker-compose.yml` file.
+## What to look at first
+
+If you are new to the project and want to understand the database quickly, start with these tables in this order:
+
+1. `routes`
+2. `bus_stops`
+3. `buses`
+4. `trips`
+5. `users`
+6. `tickets`
+7. `ticket_seats`
+
+That path usually gives the clearest picture of how the application works.
+
+## Practical summary
+
+This database is built around the full journey of a bus booking:
+
+route -> bus -> trip -> user -> ticket -> seat -> payment -> passenger event
+
+Once you understand that flow, the rest of the schema becomes much easier to follow.

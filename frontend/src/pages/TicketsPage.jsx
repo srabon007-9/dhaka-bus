@@ -22,6 +22,19 @@ const parseSeatNumbers = (value) => {
   return [];
 };
 
+const deriveSeatNumbers = (ticket) => {
+  const directSeats = parseSeatNumbers(ticket?.seat_numbers);
+  if (directSeats.length > 0) return directSeats;
+
+  if (Array.isArray(ticket?.passenger_details)) {
+    return ticket.passenger_details
+      .map((item) => Number(item.seat_number))
+      .filter((seat) => Number.isInteger(seat) && seat > 0);
+  }
+
+  return [];
+};
+
 export default function TicketsPage() {
   const { token, user } = useAuthContext();
   const toast = useToast();
@@ -29,7 +42,7 @@ export default function TicketsPage() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = String(user?.role || '').trim().toLowerCase() === 'admin';
 
   const fetchTickets = useCallback(async () => {
     setLoading(true);
@@ -107,7 +120,7 @@ export default function TicketsPage() {
                   id: ticket.id,
                   routeName: ticket.route_name,
                   tripTime: new Date(ticket.departure_time).toLocaleString(),
-                  seats: parseSeatNumbers(ticket.seat_numbers),
+                  seats: deriveSeatNumbers(ticket),
                   boardingStop: ticket.boarding_stop_name,
                   dropoffStop: ticket.dropoff_stop_name,
                   passengerName: ticket.passenger_name,

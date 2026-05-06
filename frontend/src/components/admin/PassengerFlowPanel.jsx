@@ -14,6 +14,20 @@ const parseSeatList = (value) => {
   )];
 };
 
+const deriveTicketSeats = (ticket) => {
+  if (Array.isArray(ticket?.seat_numbers) && ticket.seat_numbers.length > 0) {
+    return ticket.seat_numbers;
+  }
+
+  if (Array.isArray(ticket?.passenger_details)) {
+    return ticket.passenger_details
+      .map((item) => Number(item.seat_number))
+      .filter((seat) => Number.isInteger(seat) && seat > 0);
+  }
+
+  return [];
+};
+
 export default function PassengerFlowPanel() {
   const { token } = useAuthContext();
   const toast = useToast();
@@ -333,7 +347,7 @@ export default function PassengerFlowPanel() {
 
         {selectedTicket ? (
           <p className="mt-3 text-xs text-slate-300">
-            Ticket #{selectedTicket.id}: seats {Array.isArray(selectedTicket.seat_numbers) ? selectedTicket.seat_numbers.join(', ') : '-'} | selected stop {selectedStopLabel || '-'}
+            Ticket #{selectedTicket.id}: seats {deriveTicketSeats(selectedTicket).join(', ') || '-'} | selected stop {selectedStopLabel || '-'}
           </p>
         ) : null}
 

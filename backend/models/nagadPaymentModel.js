@@ -1,6 +1,7 @@
 const db = require('../config/database');
 const crypto = require('crypto');
 const { rethrowIfMissingTable } = require('./tableDependencyError');
+const bookingRequestModel = require('./bookingRequestModel');
 
 class NagadPaymentModel {
   /**
@@ -11,23 +12,21 @@ class NagadPaymentModel {
     merchantId,
     amount,
     currency,
-    bookingPayload,
-    userId,
+    bookingRequestId,
   }) {
     const sql = `
       INSERT INTO nagad_payments 
-      (payment_ref_id, merchant_id, amount, currency, booking_payload, user_id, status)
-      VALUES (?, ?, ?, ?, ?, ?, 'pending')
+      (payment_ref_id, merchant_id, booking_request_id, amount, currency, status)
+      VALUES (?, ?, ?, ?, ?, 'pending')
     `;
 
     try {
       const [result] = await db.query(sql, [
         paymentRefId,
         merchantId,
+        bookingRequestId,
         amount,
         currency,
-        JSON.stringify(bookingPayload),
-        userId,
       ]);
 
       return result.insertId;
@@ -47,16 +46,11 @@ class NagadPaymentModel {
       if (rows.length === 0) return null;
 
       const payment = rows[0];
+      const bookingRequest = await bookingRequestModel.getBookingRequestById(payment.booking_request_id);
+
       return {
         ...payment,
-        booking_payload:
-          typeof payment.booking_payload === 'string'
-            ? JSON.parse(payment.booking_payload)
-            : payment.booking_payload,
-        payment_details:
-          typeof payment.payment_details === 'string'
-            ? JSON.parse(payment.payment_details)
-            : payment.payment_details,
+        booking_request: bookingRequest,
       };
     } catch (error) {
       console.error('Error retrieving Nagad payment:', error.message);
@@ -67,16 +61,16 @@ class NagadPaymentModel {
   /**
    * Mark payment as completed with payment status
    */
-  static async markPaymentCompleted(refId, paymentStatus) {
+  static async markPaymentCompleted(refId, paymentStatus = {}) {
     const sql = `
       UPDATE nagad_payments 
-      SET status = 'completed', payment_details = ?, completed_at = NOW()
+      SET status = 'completed', issuer_txn_id = ?, failure_reason = NULL, completed_at = NOW()
       WHERE payment_ref_id = ?
     `;
 
     try {
       const [result] = await db.query(sql, [
-        JSON.stringify(paymentStatus),
+        paymentStatus.issuerTxnID || null,
         refId,
       ]);
       return result.affectedRows > 0;
@@ -92,15 +86,12 @@ class NagadPaymentModel {
   static async markPaymentFailed(refId, errorReason) {
     const sql = `
       UPDATE nagad_payments 
-      SET status = 'failed', payment_details = ?
+      SET status = 'failed', failure_reason = ?
       WHERE payment_ref_id = ?
     `;
 
     try {
-      const [result] = await db.query(sql, [
-        JSON.stringify({ error: errorReason }),
-        refId,
-      ]);
+      const [result] = await db.query(sql, [String(errorReason || '').slice(0, 255) || null, refId]);
       return result.affectedRows > 0;
     } catch (error) {
       console.error('Error marking Nagad payment failed:', error.message);

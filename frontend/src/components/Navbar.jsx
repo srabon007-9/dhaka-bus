@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useAuthContext } from '../contexts/AuthContextValue';
 
@@ -71,6 +71,7 @@ function UserMenu({ user, userInitial, userMenuOpen, onToggle, onClose, onLogout
 
 export default function Navbar() {
   const { isAuthenticated, user, logout } = useAuthContext();
+  const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
@@ -97,15 +98,19 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [lastScrollY]);
 
+  const isAdmin =
+    String(user?.role || '').trim().toLowerCase() === 'admin' ||
+    location.pathname.startsWith('/admin');
+
   const privateLinks = [
     { to: '/booking', label: 'Book Tickets' },
-    { to: '/tickets', label: user?.role === 'admin' ? 'All Tickets' : 'My Tickets' },
+    { to: '/tickets', label: isAdmin ? 'All Tickets' : 'My Tickets' },
   ];
 
   const links = [
     ...publicLinks,
     ...(isAuthenticated ? privateLinks : []),
-    ...(user?.role === 'admin' ? [{ to: '/admin', label: 'Admin' }] : []),
+    ...(isAdmin ? [{ to: '/admin', label: 'Admin' }] : []),
   ];
 
   const closeMenu = () => {

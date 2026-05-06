@@ -50,7 +50,7 @@ const getTicketEventContext = async (connection, ticketId, lock = false) => {
 
 const getSeatPassengers = async (connection, ticketId, normalizedSeats) => {
   const [seatRows] = await connection.query(
-    `SELECT seat_number, passenger_name
+    `SELECT id, seat_number, passenger_name
      FROM ticket_seats
      WHERE ticket_id = ?
      ORDER BY seat_number ASC`,
@@ -63,7 +63,10 @@ const getSeatPassengers = async (connection, ticketId, normalizedSeats) => {
 
   const seatMap = new Map();
   seatRows.forEach((row) => {
-    seatMap.set(Number(row.seat_number), row.passenger_name);
+    seatMap.set(Number(row.seat_number), {
+      id: Number(row.id),
+      passenger_name: row.passenger_name,
+    });
   });
 
   const seatsToUse = normalizedSeats.length ? normalizedSeats : seatRows.map((row) => Number(row.seat_number));
@@ -73,8 +76,9 @@ const getSeatPassengers = async (connection, ticketId, normalizedSeats) => {
   }
 
   return seatsToUse.map((seat) => ({
+    ticket_seat_id: seatMap.get(seat).id,
     seat_number: seat,
-    passenger_name: seatMap.get(seat),
+    passenger_name: seatMap.get(seat).passenger_name,
   }));
 };
 
@@ -120,25 +124,27 @@ const validateStopForEvent = async (connection, tripId, stopId, context, eventTy
   return stop;
 };
 
-const getLatestSeatEventMap = async (connection, ticketId, seatNumbers) => {
+const getLatestSeatEventMap = async (connection, ticketSeatIds) => {
+  if (!ticketSeatIds.length) {
+    return new Map();
+  }
+
   const [latestRows] = await connection.query(
-    `SELECT seat_number, event_type
+    `SELECT ticket_seat_id, event_type
      FROM passenger_events pe
-     WHERE pe.ticket_id = ?
-       AND pe.seat_number IN (?)
+     WHERE pe.ticket_seat_id IN (?)
        AND pe.id IN (
          SELECT MAX(pe2.id)
          FROM passenger_events pe2
-         WHERE pe2.ticket_id = ?
-           AND pe2.seat_number IN (?)
-         GROUP BY pe2.seat_number
+         WHERE pe2.ticket_seat_id IN (?)
+         GROUP BY pe2.ticket_seat_id
        )`,
-    [ticketId, seatNumbers, ticketId, seatNumbers]
+    [ticketSeatIds, ticketSeatIds]
   );
 
   const latestMap = new Map();
   latestRows.forEach((row) => {
-    latestMap.set(Number(row.seat_number), row.event_type);
+    latestMap.set(Number(row.ticket_seat_id), row.event_type);
   });
 
   return latestMap;
@@ -178,10 +184,13 @@ const recordEvent = async ({
     const stop = await validateStopForEvent(connection, context.trip_id, normalizedStopId, context, eventType);
 
     const seatNumberList = seats.map((seat) => seat.seat_number);
-    const latestSeatEvents = await getLatestSeatEventMap(connection, normalizedTicketId, seatNumberList);
+    const latestSeatEvents = await getLatestSeatEventMap(
+      connection,
+      seats.map((seat) => seat.ticket_seat_id)
+    );
 
     seats.forEach((seat) => {
-      const previous = latestSeatEvents.get(seat.seat_number);
+      const previous = latestSeatEvents.get(seat.ticket_seat_id);
 
       if (eventType === 'board' && previous === 'board') {
         throw new PassengerFlowValidationError(`Seat ${seat.seat_number} is already boarded`, 409);
@@ -197,15 +206,12 @@ const recordEvent = async ({
 
     await connection.query(
       `INSERT INTO passenger_events
-         (ticket_id, trip_id, stop_id, seat_number, passenger_name, event_type, event_time, recorded_by_user_id, notes)
+         (ticket_seat_id, stop_id, event_type, event_time, recorded_by_user_id, notes)
        VALUES ?`,
       [
         seats.map((seat) => [
-          normalizedTicketId,
-          context.trip_id,
+          seat.ticket_seat_id,
           normalizedStopId,
-          seat.seat_number,
-          seat.passenger_name,
           eventType,
           now,
           toPositiveInt(recordedByUserId),
@@ -253,13 +259,15 @@ const getTicketEvents = async ({ ticketId, requesterUserId, requesterRole }) => 
   }
 
   const [rows] = await pool.query(
-    `SELECT pe.id, pe.ticket_id, pe.trip_id, pe.stop_id, bs.stop_name,
-            pe.seat_number, pe.passenger_name, pe.event_type, pe.event_time,
+    `SELECT pe.id, ts.ticket_id, tk.trip_id, pe.stop_id, bs.stop_name,
+            ts.seat_number, ts.passenger_name, pe.event_type, pe.event_time,
             pe.recorded_by_user_id, recorder.name AS recorded_by_name, pe.notes
      FROM passenger_events pe
+     JOIN ticket_seats ts ON ts.id = pe.ticket_seat_id
+     JOIN tickets tk ON tk.id = ts.ticket_id
      JOIN bus_stops bs ON bs.id = pe.stop_id
      LEFT JOIN users recorder ON recorder.id = pe.recorded_by_user_id
-     WHERE pe.ticket_id = ?
+     WHERE ts.ticket_id = ?
      ORDER BY pe.event_time ASC, pe.id ASC`,
     [normalizedTicketId]
   );
@@ -284,7 +292,9 @@ const getTripPassengerFlow = async (tripId) => {
             SUM(CASE WHEN pe.event_type = 'alight' THEN 1 ELSE 0 END) AS alighted
      FROM bus_stops bs
      JOIN trips tr ON tr.route_id = bs.route_id
-     LEFT JOIN passenger_events pe ON pe.trip_id = tr.id AND pe.stop_id = bs.id
+     LEFT JOIN tickets tk ON tk.trip_id = tr.id
+     LEFT JOIN ticket_seats ts ON ts.ticket_id = tk.id
+     LEFT JOIN passenger_events pe ON pe.ticket_seat_id = ts.id AND pe.stop_id = bs.id
      WHERE tr.id = ?
      GROUP BY bs.id, bs.stop_name, bs.stop_order
      ORDER BY bs.stop_order ASC`,

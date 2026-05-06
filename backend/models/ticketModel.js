@@ -18,20 +18,6 @@ const normalizeSeatNumbers = (seatNumbers) => {
   )];
 };
 
-const parseSeatPayload = (value) => {
-  if (Array.isArray(value)) return normalizeSeatNumbers(value);
-
-  if (typeof value === 'string') {
-    try {
-      return normalizeSeatNumbers(JSON.parse(value));
-    } catch {
-      return [];
-    }
-  }
-
-  return [];
-};
-
 const toPositiveInt = (value) => {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
@@ -109,9 +95,10 @@ const appendSeatPassengers = async (connection, tickets) => {
 
   return tickets.map((ticket) => {
     const passengerDetails = seatsByTicketId.get(ticket.id) || [];
-    const primaryPassenger = passengerDetails[0]?.passenger_name || ticket.passenger_name || '';
+    const primaryPassenger = passengerDetails[0]?.passenger_name || '';
     return {
       ...ticket,
+      seat_numbers: passengerDetails.map((seat) => seat.seat_number),
       passenger_name: primaryPassenger,
       passenger_details: passengerDetails,
     };
@@ -179,7 +166,7 @@ const getConflictingSeats = (rows, boardingOrder, dropoffOrder) => rows.flatMap(
     return [];
   }
 
-  return parseSeatPayload(row.seat_numbers);
+  return [Number(row.seat_number)];
 });
 
 const getTicketsByUserId = async (userId) => {
@@ -223,18 +210,20 @@ const getBookedSeatsByTripId = async (tripId, boardingStopId, dropoffStopId) => 
 
   if (!normalizedBoardingStopId || !normalizedDropoffStopId) {
     const [rows] = await pool.query(
-      "SELECT seat_numbers FROM tickets WHERE trip_id = ? AND status != 'cancelled'",
+      `SELECT DISTINCT ts.seat_number
+       FROM tickets tk
+       JOIN ticket_seats ts ON ts.ticket_id = tk.id
+       WHERE tk.trip_id = ? AND tk.status != 'cancelled'`,
       [tripId]
     );
-    return rows.flatMap((row) => {
-      return parseSeatPayload(row.seat_numbers);
-    });
+    return rows.map((row) => Number(row.seat_number));
   }
 
   const metadata = await getSegmentMetadata(pool, tripId, normalizedBoardingStopId, normalizedDropoffStopId);
   const [rows] = await pool.query(
-    `SELECT tk.seat_numbers, board.stop_order AS boarding_order, dropoff.stop_order AS dropoff_order
+    `SELECT ts.seat_number, board.stop_order AS boarding_order, dropoff.stop_order AS dropoff_order
      FROM tickets tk
+     JOIN ticket_seats ts ON ts.ticket_id = tk.id
      JOIN bus_stops board ON board.id = tk.boarding_stop_id
      JOIN bus_stops dropoff ON dropoff.id = tk.dropoff_stop_id
      WHERE tk.trip_id = ? AND tk.status != 'cancelled'`,
@@ -271,8 +260,9 @@ const getBookingQuote = async ({ trip_id, boarding_stop_id, dropoff_stop_id, sea
   }
 
   const [rows] = await pool.query(
-    `SELECT tk.seat_numbers, board.stop_order AS boarding_order, dropoff.stop_order AS dropoff_order
+    `SELECT ts.seat_number, board.stop_order AS boarding_order, dropoff.stop_order AS dropoff_order
      FROM tickets tk
+     JOIN ticket_seats ts ON ts.ticket_id = tk.id
      JOIN bus_stops board ON board.id = tk.boarding_stop_id
      JOIN bus_stops dropoff ON dropoff.id = tk.dropoff_stop_id
      WHERE tk.trip_id = ? AND tk.status != 'cancelled'`,
@@ -338,8 +328,9 @@ const reserveTicket = async ({ user_id, trip_id, boarding_stop_id, dropoff_stop_
     }
 
     const [rows] = await connection.query(
-      `SELECT tk.seat_numbers, board.stop_order AS boarding_order, dropoff.stop_order AS dropoff_order
+      `SELECT ts.seat_number, board.stop_order AS boarding_order, dropoff.stop_order AS dropoff_order
        FROM tickets tk
+       JOIN ticket_seats ts ON ts.ticket_id = tk.id
        JOIN bus_stops board ON board.id = tk.boarding_stop_id
        JOIN bus_stops dropoff ON dropoff.id = tk.dropoff_stop_id
        WHERE tk.trip_id = ? AND tk.status != 'cancelled'
@@ -356,18 +347,15 @@ const reserveTicket = async ({ user_id, trip_id, boarding_stop_id, dropoff_stop_
 
     const segmentFare = normalizePrice((Number(trip.fare) * segmentLength) / totalSegments);
     const total_price = normalizePrice(segmentFare * normalizedSeats.length);
-    const primaryPassengerName = normalizedPassengers[0]?.passenger_name || normalizePassengerName(passenger_name);
 
     const [result] = await connection.query(
-      `INSERT INTO tickets (user_id, trip_id, boarding_stop_id, dropoff_stop_id, seat_numbers, passenger_name, total_price)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO tickets (user_id, trip_id, boarding_stop_id, dropoff_stop_id, total_price)
+       VALUES (?, ?, ?, ?, ?)`,
       [
         user_id,
         trip_id,
         normalizedBoardingStopId,
         normalizedDropoffStopId,
-        JSON.stringify(normalizedSeats),
-        primaryPassengerName,
         total_price,
       ]
     );
@@ -390,7 +378,7 @@ const reserveTicket = async ({ user_id, trip_id, boarding_stop_id, dropoff_stop_
       total_price,
       segment_fare: segmentFare,
       seat_numbers: normalizedSeats,
-      passenger_name: primaryPassengerName,
+      passenger_name: normalizedPassengers[0]?.passenger_name || '',
       passenger_details: normalizedPassengers,
       boarding_stop_name: boardingStop.stop_name,
       dropoff_stop_name: dropoffStop.stop_name,

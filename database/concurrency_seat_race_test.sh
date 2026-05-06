@@ -24,7 +24,7 @@ echo "Trip: $TRIP_ID | Route: $ROUTE_ID | Boarding stop: $BOARD_STOP | Dropoff s
 
 echo "[3/6] Picking a seat number likely not booked yet"
 SEAT=40
-if docker-compose exec -T mysql mysql -N -uroot -ppassword -D dhaka_bus -e "SELECT COUNT(*) FROM tickets WHERE trip_id=$TRIP_ID AND status='active' AND JSON_CONTAINS(seat_numbers, '40');" | grep -q '^1$'; then
+if docker-compose exec -T mysql mysql -N -uroot -ppassword -D dhaka_bus -e "SELECT COUNT(*) FROM tickets tk JOIN ticket_seats ts ON ts.ticket_id = tk.id WHERE tk.trip_id=$TRIP_ID AND tk.status='active' AND ts.seat_number=40;" | grep -q '^1$'; then
   SEAT=38
 fi
 

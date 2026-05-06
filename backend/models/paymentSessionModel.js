@@ -1,19 +1,19 @@
 const pool = require('../config/database');
 const { rethrowIfMissingTable } = require('./tableDependencyError');
 
-const createPendingSession = async ({ sessionId, userId, bookingPayload, amountExpected, currency }) => {
+const createPendingSession = async ({ sessionId, bookingRequestId, amountExpected, currency }) => {
   try {
     const [result] = await pool.query(
-      `INSERT INTO payment_sessions (session_id, user_id, booking_payload, amount_expected, currency)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO payment_sessions (session_id, booking_request_id, amount_expected, currency)
+       VALUES (?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
-         booking_payload = VALUES(booking_payload),
+         booking_request_id = VALUES(booking_request_id),
          amount_expected = VALUES(amount_expected),
          currency = VALUES(currency),
          status = 'pending',
          ticket_id = NULL,
          completed_at = NULL`,
-      [sessionId, userId, JSON.stringify(bookingPayload), amountExpected, currency]
+      [sessionId, bookingRequestId, amountExpected, currency]
     );
 
     return result;

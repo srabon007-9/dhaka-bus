@@ -1,55 +1,160 @@
-# Setup Guide 🛠️
+# Setup Guide
 
-So you want to run this locally? Awesome. I made sure to containerize everything so you won't have to spend 2 hours debugging Node.js versions or installing MySQL on your laptop.
+This guide explains how to run the project on your own machine in a simple way.
 
-This guide works whether you're on Windows, macOS, or Linux.
+The project is already containerized, so you do not need to install Node.js, MySQL, or phpMyAdmin manually. Docker will run the full stack for you.
 
-## What you actually need installed
+## What you need before starting
 
-Literally just two things:
-- Git (to download the code)
-- Docker Desktop (if you're on Windows/Mac) or Docker Engine (if you're on Linux)
+Install these tools first:
 
-## Let's get it running
+- Git
+- Docker Desktop on Windows or macOS, or Docker Engine on Linux
 
-1. First, pull the code from GitHub:
+That is enough for most users.
+
+## First-time setup
+
+### 1. Download the project
+
 ```bash
 git clone https://github.com/srabon007-9/dhaka-bus.git
 cd dhaka-bus
 ```
 
-2. Tell Docker to build the images and start the containers:
+### 2. Start all services
+
 ```bash
 docker compose up --build -d
 ```
-*Note: If this is your first time running it, go grab a coffee. It has to download the Node and MySQL base images, which can take a few minutes depending on your internet.*
 
-3. That's it! Everything is running.
-- **Frontend:** Head over to http://localhost to see the app.
-- **Backend API:** It's running on http://localhost:3000. You can check http://localhost:3000/api/health to make sure it didn't crash.
-- **Database GUI:** If you want to look at the database visually without using the terminal, I included phpMyAdmin at http://localhost:8080.
+This command starts:
+- MySQL
+- Backend API
+- Frontend
+- phpMyAdmin
 
-To log in, use these demo accounts:
-- **Admin:** admin@dhakabus.com / admin123
-- **Regular user:** user@dhakabus.com / user123
+### 3. Open the project in your browser
 
-## "Help, it didn't work!"
+- Frontend: `http://localhost`
+- Backend health check: `http://localhost:3000/api/health`
+- phpMyAdmin: `http://localhost:8080`
 
-If something isn't starting, 99% of the time it's because one of the ports is already being used by another app on your computer. 
-Make sure you don't have anything running on ports `80`, `3000`, `3306`, or `8080`. (If you already have local MySQL running, you'll need to turn it off or change the port in the `docker-compose.yml`).
+## Default login accounts
 
-If you just want to turn it off and back on again:
+After the seed data is loaded, you can sign in with:
+
+- Admin account: `admin@dhakabus.com` / `admin123`
+- User account: `user@dhakabus.com` / `user123`
+
+## Local services and ports
+
+By default, the project uses these ports:
+
+- `80`: frontend
+- `3000`: backend API
+- `8080`: phpMyAdmin
+- `3306`: MySQL by default, unless `MYSQL_PORT` is changed in your environment
+
+If one of these ports is already being used by another app on your machine, Docker may fail to start. In that case, stop the other app or change the port mapping in `docker-compose.yml`.
+
+## Useful Docker commands
+
+Start the app:
+
+```bash
+docker compose up --build -d
+```
+
+Stop the app:
+
+```bash
+docker compose down
+```
+
+Restart the app:
+
 ```bash
 docker compose down
 docker compose up --build -d
 ```
 
-## Want to contribute?
+See running containers:
 
-If you want to add a feature or fix a bug, please don't push directly to the master branch! 
-
-Instead, make a branch:
 ```bash
-git checkout -b feature/whatever-you-are-building
+docker compose ps
 ```
-Write your code, commit it, push the branch, and then open a Pull Request on GitHub. I'll review it when I have time!
+
+Watch logs:
+
+```bash
+docker compose logs -f
+```
+
+## Reset everything
+
+If you want to remove all local database data and start from a clean state:
+
+```bash
+docker compose down -v
+docker compose up --build -d
+```
+
+This will remove the MySQL volume, recreate the database, and reload the schema and seed data.
+
+## How the setup works
+
+When the MySQL container starts for the first time:
+
+- `database/schema.sql` creates the database tables
+- `database/seed.sql` inserts sample data
+
+The backend then connects to MySQL, and the frontend connects to the backend API.
+
+## Troubleshooting
+
+### Docker is installed but the app does not start
+
+Check whether Docker Desktop or Docker Engine is actually running.
+
+### A port is already in use
+
+This is one of the most common problems. Another service on your machine may already be using port `80`, `3000`, `3306`, or `8080`.
+
+### The frontend loads but data does not appear
+
+Check whether the backend is healthy:
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+### The app still shows old UI changes
+
+If you changed frontend code and the browser still shows the old version, rebuild and restart:
+
+```bash
+docker compose up --build -d
+```
+
+Then do a hard refresh in the browser.
+
+## If you want to contribute
+
+A simple workflow is:
+
+```bash
+git checkout -b feature/your-change
+```
+
+Then make your edits, test locally, commit your work, and open a pull request.
+
+## Final note
+
+If your goal is just to run the project, the shortest path is:
+
+```bash
+docker compose up --build -d
+```
+
+Then open `http://localhost`.

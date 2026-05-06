@@ -4,6 +4,15 @@ import { authApi } from '../services/api';
 const TOKEN_KEY = 'dhaka-bus-token';
 const USER_KEY = 'dhaka-bus-user';
 
+const normalizeUser = (user) => {
+  if (!user || typeof user !== 'object') return null;
+
+  return {
+    ...user,
+    role: typeof user.role === 'string' ? user.role.trim().toLowerCase() : user.role,
+  };
+};
+
 const readStorage = (storage, key) => {
   try {
     return storage.getItem(key);
@@ -38,7 +47,7 @@ const getPersistedAuth = () => {
 
   if (rawUser) {
     try {
-      user = JSON.parse(rawUser);
+      user = normalizeUser(JSON.parse(rawUser));
     } catch {
       clearPersistedAuth();
     }
@@ -70,8 +79,9 @@ export default function useAuth() {
   const persistSession = (nextToken, nextUser, remember) => {
     clearPersistedAuth();
     const storage = remember ? localStorage : sessionStorage;
+    const normalizedUser = normalizeUser(nextUser);
     writeStorage(storage, TOKEN_KEY, nextToken);
-    writeStorage(storage, USER_KEY, JSON.stringify(nextUser));
+    writeStorage(storage, USER_KEY, JSON.stringify(normalizedUser));
   };
 
   const login = async (email, password, options = {}) => {
@@ -82,9 +92,10 @@ export default function useAuth() {
       if (!data || !data.token || !data.user) {
         throw new Error('Unexpected login response from server');
       }
+      const normalizedUser = normalizeUser(data.user);
       setToken(data.token);
-      setUser(data.user);
-      persistSession(data.token, data.user, remember);
+      setUser(normalizedUser);
+      persistSession(data.token, normalizedUser, remember);
       return { ok: true };
     } catch (error) {
       console.error('Login error:', error);
@@ -130,9 +141,10 @@ export default function useAuth() {
       }
       try {
         const profile = await authApi.me(token);
-        setUser(profile);
+        const normalizedProfile = normalizeUser(profile);
+        setUser(normalizedProfile);
         const storage = readStorage(localStorage, TOKEN_KEY) ? localStorage : sessionStorage;
-        writeStorage(storage, USER_KEY, JSON.stringify(profile));
+        writeStorage(storage, USER_KEY, JSON.stringify(normalizedProfile));
       } catch {
         setToken('');
         setUser(null);

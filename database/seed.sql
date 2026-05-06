@@ -15,8 +15,13 @@ USE dhaka_bus;
 -- Clear existing data (safe during development)
 SET FOREIGN_KEY_CHECKS = 0;
 TRUNCATE TABLE passenger_events;
+TRUNCATE TABLE booking_request_seats;
+TRUNCATE TABLE booking_requests;
 TRUNCATE TABLE ticket_seats;
 TRUNCATE TABLE tickets;
+TRUNCATE TABLE payment_sessions;
+TRUNCATE TABLE nagad_payments;
+TRUNCATE TABLE manual_payments;
 TRUNCATE TABLE trips;
 TRUNCATE TABLE locations;
 TRUNCATE TABLE bus_stops;
@@ -351,6 +356,13 @@ INSERT INTO trips (route_id, bus_id, departure_time, arrival_time, fare, total_s
 -- SAMPLE TICKETS (optional - for testing)
 -- ==========================================
 -- User books seats on first trip
-INSERT INTO tickets (user_id, trip_id, boarding_stop_id, dropoff_stop_id, seat_numbers, passenger_name, total_price, status) VALUES
-(2, 1, 1, 7, '[1, 2, 3]', 'Ahmed Hassan', 128.57, 'active'),
-(2, 1, 9, 15, '[1, 15]', 'Fatima Khan', 128.57, 'active');
+INSERT INTO tickets (user_id, trip_id, boarding_stop_id, dropoff_stop_id, total_price, status) VALUES
+(2, 1, 1, 7, 128.57, 'active'),
+(2, 1, 9, 15, 128.57, 'active');
+
+INSERT INTO ticket_seats (ticket_id, seat_number, passenger_name) VALUES
+(1, 1, 'Ahmed Hassan'),
+(1, 2, 'Ahmed Hassan'),
+(1, 3, 'Ahmed Hassan'),
+(2, 1, 'Fatima Khan'),
+(2, 15, 'Fatima Khan');

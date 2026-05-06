@@ -105,8 +105,6 @@ CREATE TABLE IF NOT EXISTS tickets (
   trip_id INT NOT NULL,
   boarding_stop_id INT NOT NULL,
   dropoff_stop_id INT NOT NULL,
-  seat_numbers JSON NOT NULL,
-  passenger_name VARCHAR(120) NOT NULL,
   total_price DECIMAL(10, 2) NOT NULL,
   status ENUM('active', 'cancelled') DEFAULT 'active',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -116,26 +114,56 @@ CREATE TABLE IF NOT EXISTS tickets (
   FOREIGN KEY (dropoff_stop_id) REFERENCES bus_stops(id) ON DELETE RESTRICT
 );
 
+-- Normalized booking requests used by payment flows before ticket creation
+CREATE TABLE IF NOT EXISTS booking_requests (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  trip_id INT NOT NULL,
+  boarding_stop_id INT NOT NULL,
+  dropoff_stop_id INT NOT NULL,
+  total_price DECIMAL(10, 2) NOT NULL,
+  currency VARCHAR(10) NOT NULL DEFAULT 'bdt',
+  status ENUM('pending', 'fulfilled', 'cancelled', 'expired') DEFAULT 'pending',
+  ticket_id INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE,
+  FOREIGN KEY (boarding_stop_id) REFERENCES bus_stops(id) ON DELETE RESTRICT,
+  FOREIGN KEY (dropoff_stop_id) REFERENCES bus_stops(id) ON DELETE RESTRICT,
+  FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE SET NULL,
+  INDEX idx_booking_requests_user_status (user_id, status, created_at),
+  INDEX idx_booking_requests_trip_status (trip_id, status, created_at)
+);
+
+CREATE TABLE IF NOT EXISTS booking_request_seats (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  booking_request_id INT NOT NULL,
+  seat_number INT NOT NULL,
+  passenger_name VARCHAR(120) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_booking_request_seat (booking_request_id, seat_number),
+  INDEX idx_booking_request_seats_request (booking_request_id),
+  FOREIGN KEY (booking_request_id) REFERENCES booking_requests(id) ON DELETE CASCADE
+);
+
 -- Offline/manual payment attempts
 CREATE TABLE IF NOT EXISTS manual_payments (
   id INT PRIMARY KEY AUTO_INCREMENT,
   payment_id VARCHAR(50) UNIQUE NOT NULL,
-  user_id INT NULL,
+  booking_request_id INT NOT NULL,
   amount DECIMAL(10, 2) NOT NULL,
   currency VARCHAR(3) DEFAULT 'bdt',
   payment_method ENUM('bkash', 'nagad', 'both') NOT NULL,
-  booking_payload JSON NOT NULL,
   status ENUM('pending', 'verified', 'completed', 'rejected', 'cancelled') DEFAULT 'pending',
-  payment_details JSON NULL,
   verified_by INT NULL,
   verified_at TIMESTAMP NULL,
   notes TEXT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   expires_at TIMESTAMP DEFAULT (DATE_ADD(NOW(), INTERVAL 30 MINUTE)),
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (booking_request_id) REFERENCES booking_requests(id) ON DELETE CASCADE,
   FOREIGN KEY (verified_by) REFERENCES users(id) ON DELETE SET NULL,
   INDEX idx_manual_payments_status_expires (status, expires_at),
-  INDEX idx_manual_payments_user_status_created (user_id, status, created_at),
+  INDEX idx_manual_payments_request_status_created (booking_request_id, status, created_at),
   INDEX idx_manual_payments_method_status (payment_method, status)
 );
 
@@ -144,33 +172,32 @@ CREATE TABLE IF NOT EXISTS nagad_payments (
   id INT PRIMARY KEY AUTO_INCREMENT,
   payment_ref_id VARCHAR(50) UNIQUE NOT NULL,
   merchant_id VARCHAR(100) NOT NULL,
+  booking_request_id INT NOT NULL,
   amount DECIMAL(10, 2) NOT NULL,
   currency VARCHAR(3) DEFAULT 'bdt',
-  booking_payload JSON NOT NULL,
-  user_id INT NULL,
   status ENUM('pending', 'completed', 'failed', 'cancelled') DEFAULT 'pending',
-  payment_details JSON NULL,
+  issuer_txn_id VARCHAR(100) NULL,
+  failure_reason VARCHAR(255) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   completed_at TIMESTAMP NULL,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
-  INDEX idx_nagad_payments_user_id (user_id)
+  FOREIGN KEY (booking_request_id) REFERENCES booking_requests(id) ON DELETE CASCADE,
+  INDEX idx_nagad_payments_booking_request_id (booking_request_id)
 );
 
 -- Checkout sessions before ticket creation
 CREATE TABLE IF NOT EXISTS payment_sessions (
   id INT PRIMARY KEY AUTO_INCREMENT,
   session_id VARCHAR(255) NOT NULL UNIQUE,
-  user_id INT NOT NULL,
-  booking_payload JSON NOT NULL,
+  booking_request_id INT NOT NULL,
   amount_expected DECIMAL(10, 2) NOT NULL,
   currency VARCHAR(10) NOT NULL DEFAULT 'bdt',
   status ENUM('pending', 'completed', 'failed') DEFAULT 'pending',
   ticket_id INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   completed_at DATETIME NULL,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (booking_request_id) REFERENCES booking_requests(id) ON DELETE CASCADE,
   FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE SET NULL,
-  INDEX idx_payment_sessions_user_status (user_id, status)
+  INDEX idx_payment_sessions_request_status (booking_request_id, status)
 );
 
 -- Password reset tokens
@@ -200,22 +227,18 @@ CREATE TABLE IF NOT EXISTS ticket_seats (
 -- Boarding and alighting logs by stop
 CREATE TABLE IF NOT EXISTS passenger_events (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  ticket_id INT NOT NULL,
-  trip_id INT NOT NULL,
+  ticket_seat_id INT NOT NULL,
   stop_id INT NOT NULL,
-  seat_number INT NOT NULL,
-  passenger_name VARCHAR(120) NOT NULL,
   event_type ENUM('board', 'alight') NOT NULL,
   event_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   recorded_by_user_id INT NULL,
   notes VARCHAR(255) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_passenger_events_trip_stop (trip_id, stop_id, event_time),
-  INDEX idx_passenger_events_ticket_seat (ticket_id, seat_number, event_time),
+  INDEX idx_passenger_events_stop_time (stop_id, event_time),
+  INDEX idx_passenger_events_ticket_seat (ticket_seat_id, event_time),
   INDEX idx_passenger_events_recorded_by_user (recorded_by_user_id),
-  UNIQUE KEY uq_passenger_event_stop (ticket_id, seat_number, stop_id, event_type),
-  FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE CASCADE,
-  FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE,
+  UNIQUE KEY uq_passenger_event_stop (ticket_seat_id, stop_id, event_type),
+  FOREIGN KEY (ticket_seat_id) REFERENCES ticket_seats(id) ON DELETE CASCADE,
   FOREIGN KEY (stop_id) REFERENCES bus_stops(id) ON DELETE RESTRICT,
   FOREIGN KEY (recorded_by_user_id) REFERENCES users(id) ON DELETE SET NULL
 );

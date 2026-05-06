@@ -14,7 +14,7 @@ const busStatsSelect = `
     COALESCE(trip_sales.booked_seats, 0) AS booked_seats,
     GREATEST(COALESCE(next_trip.total_seats, b.capacity, 0) - COALESCE(trip_sales.booked_seats, 0), 0) AS available_seats,
     COALESCE(trip_sales.ticket_count, 0) AS passenger_tickets,
-    COALESCE(trip_flow.onboard_passengers, 0) AS onboard_passengers
+    0 AS onboard_passengers
   FROM buses b
   JOIN routes r ON r.id = b.route_id
   LEFT JOIN trips next_trip
@@ -38,20 +38,6 @@ const busStatsSelect = `
     WHERE tk.status = 'active'
     GROUP BY tk.trip_id
   ) trip_sales ON trip_sales.trip_id = next_trip.id
-  LEFT JOIN (
-    SELECT
-      pe.trip_id,
-      COUNT(*) AS onboard_passengers
-    FROM passenger_events pe
-    JOIN (
-      SELECT ticket_id, seat_number, MAX(id) AS last_event_id
-      FROM passenger_events
-      GROUP BY ticket_id, seat_number
-    ) latest
-      ON latest.last_event_id = pe.id
-    WHERE pe.event_type = 'board'
-    GROUP BY pe.trip_id
-  ) trip_flow ON trip_flow.trip_id = next_trip.id
 `;
 
 const getAllBuses = async () => {
