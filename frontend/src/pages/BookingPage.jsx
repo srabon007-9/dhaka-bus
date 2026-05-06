@@ -14,6 +14,7 @@ import { useAuthContext } from '../contexts/AuthContextValue';
 import PageMotion from '../components/common/PageMotion';
 
 const steps = ['Choose Journey', 'Select Bus & Seats', 'Confirm Booking'];
+const MANUAL_PAYMENT_STORAGE_KEY = 'dhaka-bus-pending-manual-payment';
 
 const makeSeats = (count) =>
   Array.from({ length: count }).map((_, index) => ({
@@ -45,6 +46,41 @@ const calculateSegmentPrice = (trip, boardingStop, dropoffStop, stops) => {
   return Number(((Number(trip.fare) * segmentLength) / totalSegments).toFixed(2));
 };
 
+const buildConfirmedSuccessState = (ticket, email = '') => ({
+  routeName: ticket.route_name,
+  busName: ticket.bus_name,
+  departure: ticket.departure_time,
+  journeyLabel: `${ticket.boarding_stop_name} to ${ticket.dropoff_stop_name}`,
+  seatLabels: (ticket.seat_numbers || []).map((seat) => `S${seat}`).join(', '),
+  totalPrice: Number(ticket.total_price).toFixed(2),
+  email,
+});
+
+const persistManualPaymentState = (state) => {
+  try {
+    localStorage.setItem(MANUAL_PAYMENT_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Ignore storage failures and keep the in-memory flow working.
+  }
+};
+
+const readManualPaymentState = () => {
+  try {
+    const raw = localStorage.getItem(MANUAL_PAYMENT_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const clearManualPaymentState = () => {
+  try {
+    localStorage.removeItem(MANUAL_PAYMENT_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures and keep the in-memory flow working.
+  }
+};
+
 export default function BookingPage() {
   const navigate = useNavigate();
   const { routes, loading: routesLoading, error: routesError, retry } = useLiveTracking();
@@ -69,6 +105,7 @@ export default function BookingPage() {
   const [passengerName, setPassengerName] = useState(user?.name || '');
   const [passengerDetailsBySeat, setPassengerDetailsBySeat] = useState({});
   const [processing, setProcessing] = useState(false);
+  const [manualStatusChecking, setManualStatusChecking] = useState(false);
   const [successState, setSuccessState] = useState(null);
 
   const boardingStop = useMemo(
@@ -115,6 +152,16 @@ export default function BookingPage() {
   }, [selectedSeats]);
 
   useEffect(() => {
+    if (!token || successState) return;
+
+    const pendingManualPayment = readManualPaymentState();
+    if (pendingManualPayment?.paymentId) {
+      setSuccessState(pendingManualPayment);
+      setStep(3);
+    }
+  }, [successState, token]);
+
+  useEffect(() => {
     const search = new URLSearchParams(window.location.search);
     const paymentStatus = search.get('payment');
     const paymentRef = search.get('payment_ref');
@@ -136,15 +183,8 @@ export default function BookingPage() {
             throw new Error('Ticket confirmation response is incomplete.');
           }
 
-          setSuccessState({
-            routeName: ticket.route_name,
-            busName: ticket.bus_name,
-            departure: ticket.departure_time,
-            journeyLabel: `${ticket.boarding_stop_name} to ${ticket.dropoff_stop_name}`,
-            seatLabels: (ticket.seat_numbers || []).map((seat) => `S${seat}`).join(', '),
-            totalPrice: Number(ticket.total_price).toFixed(2),
-            email: user?.email || '',
-          });
+          clearManualPaymentState();
+          setSuccessState(buildConfirmedSuccessState(ticket, user?.email || ''));
           setStep(3);
           toast.success('✓ Payment verified and booking confirmed!');
         } catch (error) {
@@ -176,8 +216,10 @@ export default function BookingPage() {
     setPassengerName(user?.name || '');
     setPassengerDetailsBySeat({});
     setProcessing(false);
+    setManualStatusChecking(false);
     setSuccessState(null);
     setSeatModalOpen(false);
+    clearManualPaymentState();
   };
 
   const handleRouteSelect = async (routeItem) => {
@@ -306,7 +348,7 @@ export default function BookingPage() {
 
       // Manual Payment Mode (shows bKash/Nagad account details)
       if (Array.isArray(checkout?.paymentMethods) && checkout.paymentMethods.length > 0) {
-        setSuccessState({
+        const pendingManualState = {
           isManualPayment: true,
           paymentId: checkout.payment_id,
           amount: checkout.amount,
@@ -315,7 +357,9 @@ export default function BookingPage() {
           routeName: stopApi.listByRoute ? 'Route Info' : '',
           busName: 'Bus',
           expiresIn: checkout.expiresIn,
-        });
+        };
+        setSuccessState(pendingManualState);
+        persistManualPaymentState(pendingManualState);
         setStep(3);
         toast.info('📱 Send money to complete your booking');
         setProcessing(false);
@@ -349,6 +393,87 @@ export default function BookingPage() {
     } catch (error) {
       toast.error(error?.response?.data?.message || 'Unable to start payment. Please try again.');
       setProcessing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!token || !successState?.isManualPayment || !successState.paymentId) return undefined;
+
+    let active = true;
+
+    const checkManualPaymentStatus = async ({ quiet = false } = {}) => {
+      try {
+        const payment = await ticketApi.getManualPaymentStatus(successState.paymentId, token);
+        if (!active) return;
+
+        if (payment?.ticket && (payment.status === 'completed' || payment.status === 'verified')) {
+          clearManualPaymentState();
+          setSuccessState(buildConfirmedSuccessState(payment.ticket, user?.email || ''));
+          setStep(3);
+          toast.success('Admin verified your payment. Your ticket is ready.');
+          return;
+        }
+
+        if (payment?.status === 'rejected') {
+          clearManualPaymentState();
+          toast.error('Your manual payment was rejected. Please contact admin or book again.');
+          resetBooking();
+          return;
+        }
+
+        if (payment?.status === 'expired' || payment?.status === 'cancelled') {
+          clearManualPaymentState();
+          toast.info('This manual payment request is no longer active. Please start a new booking.');
+          resetBooking();
+          return;
+        }
+
+        if (!quiet && payment?.status === 'pending') {
+          toast.info('Payment is still waiting for admin verification. We will notify you here once it is approved.');
+        }
+      } catch (error) {
+        if (!quiet) {
+          toast.error(error?.response?.data?.message || 'Could not check payment status right now.');
+        }
+      }
+    };
+
+    checkManualPaymentStatus({ quiet: true });
+    const interval = setInterval(() => {
+      checkManualPaymentStatus({ quiet: true });
+    }, 10000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [successState, toast, token, user?.email]);
+
+  const handleManualPaymentCheck = async () => {
+    if (!successState?.paymentId) return;
+
+    setManualStatusChecking(true);
+    try {
+      const result = await ticketApi.completeManualPayment(successState.paymentId, token);
+      const ticket = result?.ticket;
+
+      if (!ticket) {
+        throw new Error('Ticket confirmation response is incomplete.');
+      }
+
+      clearManualPaymentState();
+      setSuccessState(buildConfirmedSuccessState(ticket, user?.email || ''));
+      setStep(3);
+      toast.success('Payment already verified. Your ticket is now confirmed.');
+    } catch (error) {
+      const message = error?.response?.data?.message || error?.message || 'Payment is still pending.';
+      if (/pending|wait for admin approval|not completed yet/i.test(message)) {
+        toast.info('Payment is still waiting for admin verification. We will notify you here once it is approved.');
+      } else {
+        toast.error(message);
+      }
+    } finally {
+      setManualStatusChecking(false);
     }
   };
 
@@ -757,16 +882,17 @@ export default function BookingPage() {
                   <div className="mt-8 p-4 bg-amber-900/20 border border-amber-700/30 rounded-xl text-amber-100 text-sm">
                     <strong>⏱️ Payment expires in {successState.expiresIn}</strong>
                     <p className="mt-2">After sending money, click "I've Sent the Payment" below.</p>
+                    <p className="mt-2 text-amber-200/90">
+                      As soon as admin verifies it, you will see a notification here and your ticket will be confirmed automatically.
+                    </p>
                   </div>
 
                   <button
-                    onClick={() => ticketApi.completeManualPayment(successState.paymentId, token).then(() => {
-                      toast.success('Booking confirmed!');
-                      setTimeout(() => navigate('/tickets'), 2000);
-                    }).catch(() => toast.error('Payment not yet verified by admin'))}
+                    onClick={handleManualPaymentCheck}
                     className="btn-primary w-full mt-6"
+                    disabled={manualStatusChecking}
                   >
-                    I've Sent the Payment ✓
+                    {manualStatusChecking ? 'Checking verification...' : "I've Sent the Payment ✓"}
                   </button>
 
                   <button onClick={resetBooking} className="btn-secondary w-full mt-3">

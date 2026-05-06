@@ -116,6 +116,16 @@ const buildBookingRequestPayload = (bookingRequest) => ({
   passenger_details: Array.isArray(bookingRequest.passenger_details) ? bookingRequest.passenger_details : [],
 });
 
+const getManualPaymentStatus = (payment) => {
+  if (!payment) return 'unknown';
+
+  if (payment.status === 'pending' && payment.expires_at && new Date(payment.expires_at) <= new Date()) {
+    return 'expired';
+  }
+
+  return payment.status;
+};
+
 const finalizeManualPaymentTicket = async ({ payment, paymentId, userForEmail }) => {
   const bookingRequest = payment.booking_request;
   if (!bookingRequest) {
@@ -678,7 +688,16 @@ router.post('/payment/manual/complete', verifyToken, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
 
-    if (payment.status === 'verified') {
+    const paymentStatus = getManualPaymentStatus(payment);
+
+    if (paymentStatus === 'expired') {
+      return res.status(400).json({
+        success: false,
+        message: 'This payment request has expired. Please start a new booking.',
+      });
+    }
+
+    if (paymentStatus === 'verified') {
       const finalized = await finalizeManualPaymentTicket({
         payment,
         paymentId: payment_id,
@@ -697,7 +716,7 @@ router.post('/payment/manual/complete', verifyToken, async (req, res) => {
       });
     }
 
-    if (payment.status === 'completed') {
+    if (paymentStatus === 'completed') {
       const completedTicketId = Number(payment.booking_request?.ticket_id);
       const completedTicket = completedTicketId
         ? await ticketModel.getTicketById(completedTicketId)
@@ -712,7 +731,7 @@ router.post('/payment/manual/complete', verifyToken, async (req, res) => {
 
     return res.status(400).json({
       success: false,
-      message: `Payment is ${payment.status}. Please wait for admin verification.`,
+      message: `Payment is ${paymentStatus}. Please wait for admin verification.`,
     });
   } catch (error) {
     if (error instanceof ticketModel.TicketValidationError) {
@@ -745,17 +764,22 @@ router.get('/payment/manual/:paymentId', verifyToken, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
 
-    const isExpired = new Date(payment.expires_at) < new Date();
+    const status = getManualPaymentStatus(payment);
+    const completedTicketId = Number(payment.booking_request?.ticket_id);
+    const completedTicket = completedTicketId
+      ? await ticketModel.getTicketById(completedTicketId)
+      : null;
 
     return res.json({
       success: true,
       data: {
         payment_id: payment.payment_id,
-        status: isExpired ? 'expired' : payment.status,
+        status,
         amount: payment.amount,
         currency: payment.currency,
         created_at: payment.created_at,
         verified_at: payment.verified_at,
+        ticket: completedTicket ? buildTicketResponse(completedTicket) : null,
       },
     });
   } catch (error) {
@@ -811,7 +835,16 @@ router.post('/admin/payments/:paymentId/verify', verifyToken, async (req, res) =
       return res.status(404).json({ success: false, message: 'Payment not found' });
     }
 
-    if (payment.status === 'completed') {
+    const paymentStatus = getManualPaymentStatus(payment);
+
+    if (paymentStatus === 'expired') {
+      return res.status(400).json({
+        success: false,
+        message: 'Expired payments cannot be verified. Ask the user to create a new booking request.',
+      });
+    }
+
+    if (paymentStatus === 'completed') {
       return res.status(200).json({
         success: true,
         message: 'Payment already confirmed and ticket already issued.',
@@ -819,14 +852,14 @@ router.post('/admin/payments/:paymentId/verify', verifyToken, async (req, res) =
       });
     }
 
-    if (payment.status === 'rejected' || payment.status === 'cancelled') {
+    if (paymentStatus === 'rejected' || paymentStatus === 'cancelled') {
       return res.status(400).json({
         success: false,
-        message: `Cannot verify a ${payment.status} payment`,
+        message: `Cannot verify a ${paymentStatus} payment`,
       });
     }
 
-    if (payment.status === 'pending') {
+    if (paymentStatus === 'pending') {
       const verified = await manualPaymentModel.verifyPayment(paymentId, user.id, notes || '');
       if (!verified) {
         return res.status(400).json({ success: false, message: 'Could not verify payment' });
